@@ -1,0 +1,515 @@
+import { motion, AnimatePresence } from "framer-motion"
+import {
+  MapPin, Plus, GripVertical, Clock,
+  Hotel, Utensils, Camera, TreePine, Landmark, ShoppingBag,
+  AlertTriangle, Sun, Cloud, CloudRain, Eye,
+  Users, ArrowLeft, Search, Filter, Layers, Settings,
+  Navigation, Trash2, Edit3, Copy, ExternalLink, Map as MapIcon2,
+  Loader2, X, Check, Map as MapIcon, Plane, Calendar, ChevronRight
+} from "lucide-react"
+import { Button } from "../components/ui/button"
+import { Badge } from "../components/ui/badge"
+import { Avatar, AvatarFallback } from "../components/ui/avatar"
+import { Progress } from "../components/ui/progress"
+import { Input } from "../components/ui/input"
+import { Label } from "../components/ui/label"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog"
+import { cn, formatDistance, formatDuration } from "@/lib/utils"
+import { useState, useEffect, useRef, useCallback } from "react"
+import { getTrips, createTrip, getItinerary, addItineraryItem } from "../lib/supabase"
+import { searchPlaces } from "../lib/api"
+import { TripMap } from "../components/TripMap"
+import type { Trip, ItineraryItem } from "../lib/supabase"
+
+// ─── Destination types map ────────────────────────────────
+const destinationTypes: Record<string, { icon: typeof MapPin; color: string }> = {
+  hotel: { icon: Hotel, color: "from-blue-400 to-cyan-400" },
+  landmark: { icon: Landmark, color: "from-sunset-400 to-coral-500" },
+  food: { icon: Utensils, color: "from-orange-400 to-amber-400" },
+  nature: { icon: TreePine, color: "from-emerald-400 to-green-400" },
+  activity: { icon: Camera, color: "from-pink-400 to-rose-400" },
+  shopping: { icon: ShoppingBag, color: "from-fuchsia-400 to-pink-400" },
+  transport: { icon: MapIcon2, color: "from-gray-400 to-gray-500" },
+}
+
+function getWeatherEmoji(dayIndex: number): string { return [Sun, Cloud, CloudRain][dayIndex % 3].name === "CloudRain" ? "🌧️" : [Sun, Cloud, CloudRain][dayIndex % 3].name === "Cloud" ? "⛅" : "☀️" }
+
+// ─── Destination Card (from real data) ────────────────────
+function DestinationCard({ item, dayIndex, index }: { item: ItineraryItem; dayIndex: number; index: number }) {
+  const type = destinationTypes[item.category] || destinationTypes.landmark
+  const Icon = type.icon
+
+  return (
+    <motion.div layout initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="destination-card group">
+      <div className="flex items-start gap-4">
+        <div className="flex flex-col items-center gap-2">
+          <button className="p-1 rounded hover:bg-white/10 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity">
+            <GripVertical className="w-4 h-4 text-muted-foreground" />
+          </button>
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-lg bg-gradient-to-br ${type.color} shadow-lg`}>
+            {index + 1}
+          </div>
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2 mb-2">
+            <div className="flex items-center gap-2">
+              <Icon className="w-4 h-4 text-muted-foreground" />
+              <h4 className="font-semibold text-base">{item.title}</h4>
+            </div>
+            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button className="p-1 rounded hover:bg-white/10"><Edit3 className="w-4 h-4 text-muted-foreground" /></button>
+              <button className="p-1 rounded hover:bg-white/10"><Copy className="w-4 h-4 text-muted-foreground" /></button>
+              <button className="p-1 rounded hover:bg-red-500/10"><Trash2 className="w-4 h-4 text-red-400" /></button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground mb-3">
+            <div className="flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5" />
+              {item.time}
+              {item.duration_minutes && <span className="text-xs">({item.duration_minutes} menit)</span>}
+            </div>
+            {item.location && (
+              <div className="flex items-center gap-1">
+                <MapPin className="w-3.5 h-3.5" />
+                <span className="text-xs truncate max-w-[150px]">{item.location}</span>
+              </div>
+            )}
+          </div>
+          {item.notes && <p className="text-sm text-muted-foreground">{item.notes}</p>}
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+
+function ConflictWarning({ type, message }: { type: string; message: string }) {
+  return (
+    <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="conflict-warning">
+      <AlertTriangle className="w-5 h-5 text-[var(--coral-accent)] shrink-0 mt-0.5" />
+      <div>
+        <p className="font-medium text-sm">{type}</p>
+        <p className="text-sm text-muted-foreground">{message}</p>
+      </div>
+    </motion.div>
+  )
+}
+
+// ─── Create Trip Modal ────────────────────────────────────
+function CreateTripModal({ onCreated }: { onCreated: (trip: Trip) => void }) {
+  const [open, setOpen] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState("")
+  const [form, setForm] = useState({ name: "", destination: "", start_date: "", end_date: "" })
+  const [suggestions, setSuggestions] = useState<any[]>([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const handleDestinationChange = (value: string) => {
+    setForm(f => ({ ...f, destination: value }))
+    setShowSuggestions(false)
+    if (searchTimeout.current) clearTimeout(searchTimeout.current)
+    if (value.length < 2) { setSuggestions([]); return }
+    searchTimeout.current = setTimeout(async () => {
+      try {
+        const results = await searchPlaces(value)
+        setSuggestions(results)
+        setShowSuggestions(true)
+      } catch { setSuggestions([]) }
+    }, 300)
+  }
+
+  const handleSelectSuggestion = (s: any) => {
+    setForm(f => ({ ...f, destination: s.display_name.split(",")[0].trim() }))
+    setShowSuggestions(false)
+    setSuggestions([])
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!form.name || !form.destination) return
+    setIsLoading(true)
+    setError("")
+    try {
+      const trip = await createTrip({
+        name: form.name,
+        destination: form.destination,
+        start_date: form.start_date || undefined,
+        end_date: form.end_date || undefined,
+        status: "planning",
+      })
+      onCreated(trip as Trip)
+      setForm({ name: "", destination: "", start_date: "", end_date: "" })
+      setOpen(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal membuat trip")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="gradient" size="sm" className="w-full">
+          <Plus className="w-4 h-4 mr-2" />Buat Trip Baru
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Buat Trip Baru</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && <div className="p-3 rounded-lg bg-red-50 text-red-600 text-sm">{error}</div>}
+          <div className="space-y-2">
+            <Label>Nama Trip</Label>
+            <Input placeholder="Contoh: Liburan Bali 4 Hari" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
+          </div>
+          <div className="space-y-2 relative">
+            <Label>Destinasi</Label>
+            <Input placeholder="Ketik kota atau negara..." value={form.destination} onChange={e => handleDestinationChange(e.target.value)} onFocus={() => suggestions.length > 0 && setShowSuggestions(true)} required />
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="absolute z-50 w-full bg-white border border-border rounded-xl shadow-lg max-h-56 overflow-y-auto">
+                {suggestions.map(s => (
+                  <button key={s.place_id} type="button" onClick={() => handleSelectSuggestion(s)} className="w-full text-left px-4 py-3 hover:bg-muted/60 transition-colors flex items-start gap-3 border-b border-border/50 last:border-0">
+                    <MapPin className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+                    <span className="text-sm font-medium">{s.display_name.split(",")[0]}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Tanggal Mulai</Label>
+              <Input type="date" value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <Label>Tanggal Selesai</Label>
+              <Input type="date" value={form.end_date} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))} />
+            </div>
+          </div>
+          <Button type="submit" variant="gradient" className="w-full" disabled={isLoading}>
+            {isLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Membuat...</> : <><Plane className="w-4 h-4 mr-2" />Buat Trip</>}
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── Day data derived from real itinerary items ───────────
+interface DayGroup {
+  day: number
+  date: string
+  items: ItineraryItem[]
+}
+
+function groupItemsByDay(items: ItineraryItem[]): DayGroup[] {
+  const map = new Map<number, ItineraryItem[]>()
+  for (const item of items) {
+    if (!map.has(item.day)) map.set(item.day, [])
+    map.get(item.day)!.push(item)
+  }
+  const sorted = [...map.entries()].sort((a, b) => a[0] - b[0])
+  return sorted.map(([day, dayItems]) => ({
+    day,
+    date: dayItems[0]?.time || `Hari ${day}`,
+    items: dayItems.sort((a, b) => a.sort_order - b.sort_order),
+  }))
+}
+
+// ─── Main Page ────────────────────────────────────────────
+interface TripEditorProps {
+  setCurrentPage: (page: "landing" | "login" | "register" | "home" | "editor" | "ai" | "splitbill" | "explore" | "profile" | "achievements" | "bucketlist" | "settings" | "notifications") => void
+  sidebarCollapsed?: boolean
+  onToggleSidebar?: () => void
+}
+
+export function TripEditorPage({ setCurrentPage, sidebarCollapsed = false, onToggleSidebar }: TripEditorProps) {
+  const [trips, setTrips] = useState<Trip[]>([])
+  const [tripsLoading, setTripsLoading] = useState(true)
+  const [tripsError, setTripsError] = useState("")
+  const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null)
+  const [itineraryItems, setItineraryItems] = useState<ItineraryItem[]>([])
+  const [itemsLoading, setItemsLoading] = useState(false)
+  const [selectedDay, setSelectedDay] = useState(0)
+  const [mapView, setMapView] = useState<"day" | "full">("day")
+  const [searchQuery, setSearchQuery] = useState("")
+  const [showTripList, setShowTripList] = useState(true)
+
+  // Load trips on mount
+  useEffect(() => {
+    getTrips()
+      .then(data => {
+        setTrips(data)
+        if (data.length > 0) setSelectedTrip(data[0])
+      })
+      .catch(err => setTripsError(err instanceof Error ? err.message : ""))
+      .finally(() => setTripsLoading(false))
+  }, [])
+
+  // Load itinerary items when selected trip changes
+  useEffect(() => {
+    if (!selectedTrip) { setItineraryItems([]); return }
+    setItemsLoading(true)
+    getItinerary(selectedTrip.id)
+      .then(data => setItineraryItems(data))
+      .catch(() => setItineraryItems([]))
+      .finally(() => setItemsLoading(false))
+  }, [selectedTrip])
+
+  const handleTripCreated = useCallback((trip: Trip) => {
+    setTrips(prev => [trip, ...prev])
+    setSelectedTrip(trip)
+    setItineraryItems([])
+  }, [])
+
+  const dayGroups = groupItemsByDay(itineraryItems)
+  const currentDay = dayGroups[selectedDay]
+
+  // Map locations for TripMap
+  const mapLocations = (mapView === "day" && currentDay ? currentDay.items : itineraryItems)
+    .filter(d => d.latitude && d.longitude)
+    .map((d, i) => ({
+      id: d.id,
+      title: d.title,
+      lat: d.latitude!,
+      lng: d.longitude!,
+      category: d.category,
+      time: d.time,
+    }))
+
+  // Stats from real data
+  const totalDestinations = itineraryItems.length
+
+  return (
+    <div className="min-h-screen flex">
+      {/* ── Left Sidebar — collapsible ── */}
+      <div className={`
+        border-r border-border flex flex-col bg-background/50 backdrop-blur-sm
+        transition-all duration-300 ease-out
+        ${sidebarCollapsed ? "w-0 overflow-hidden" : "w-[420px]"}
+      `}>
+        {/* Sidebar Header */}
+        <div className={`
+          p-4 border-b border-border space-y-3
+          ${sidebarCollapsed ? "hidden" : ""}
+        `}>
+          <div className="flex items-center gap-3">
+            {/* Toggle button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="shrink-0"
+              onClick={onToggleSidebar}
+              aria-label={sidebarCollapsed ? "Perluas sidebar" : "Persempit sidebar"}
+            >
+              <ChevronRight className={`w-4 h-4 transition-transform duration-300 ${sidebarCollapsed ? "" : "rotate-180"}`} />
+            </Button>
+            <div className="flex-1 min-w-0">
+              <h1 className="font-bold text-lg truncate">
+                {selectedTrip ? selectedTrip.name : "Trip Editor"}
+              </h1>
+              {selectedTrip?.start_date && (
+                <p className="text-sm text-muted-foreground truncate">
+                  {new Date(selectedTrip.start_date + "T00:00:00").toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
+                  {selectedTrip.end_date && ` - ${new Date(selectedTrip.end_date + "T00:00:00").toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}`}
+                </p>
+              )}
+            </div>
+            {selectedTrip && (
+              <Badge variant={selectedTrip.status === "active" ? "ocean" : "aurora"} className="shrink-0">
+                {selectedTrip.status === "active" ? "Aktif" : selectedTrip.status === "completed" ? "Selesai" : "Planning"}
+              </Badge>
+            )}
+          </div>
+          <CreateTripModal onCreated={handleTripCreated} />
+        </div>
+
+        {/* Trip List */}
+        {tripsLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-[var(--aurora-start)]" />
+          </div>
+        ) : trips.length === 0 ? (
+          <div className="p-6 text-center text-sm text-muted-foreground">
+            <MapIcon className="w-10 h-10 mx-auto mb-3 opacity-20" />
+            <p className="font-medium mb-1">Belum ada trip</p>
+            <p className="text-xs opacity-70">Buat trip pertamamu dengan tombol di atas, atau generate dengan AI!</p>
+          </div>
+        ) : (
+          <div className="p-4 border-b border-border">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium text-muted-foreground">TRIP SAYA ({trips.length})</span>
+              <button onClick={() => setShowTripList(s => !s)} className="text-xs text-[var(--aurora-start)]">
+                {showTripList ? "Sembunyikan" : "Tampilkan"}
+              </button>
+            </div>
+            <AnimatePresence>
+              {showTripList && (
+                <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} className="overflow-hidden">
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {trips.map(trip => (
+                      <button
+                        key={trip.id}
+                        onClick={() => setSelectedTrip(trip)}
+                        className={cn(
+                          "w-full text-left px-3 py-2 rounded-xl text-sm transition-all",
+                          selectedTrip?.id === trip.id
+                            ? "bg-gradient-to-r from-[var(--aurora-start)]/10 to-[var(--aurora-end)]/10 border border-[var(--aurora-start)]/30"
+                            : "hover:bg-white/5"
+                        )}
+                      >
+                        <div className="font-medium">{trip.name}</div>
+                        <div className="text-xs text-muted-foreground flex items-center gap-1">
+                          <MapPin className="w-3 h-3" />{trip.destination}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
+
+        {/* Search & Filter */}
+        <div className="p-4 border-b border-border space-y-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input placeholder="Cari destinasi..." className="pl-10" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button variant="ghost" size="sm" className="text-xs"><Filter className="w-3 h-3 mr-1" />Filter</Button>
+          </div>
+        </div>
+
+        {/* Day Tabs (from real data) */}
+        {dayGroups.length > 0 && (
+          <div className="p-4 border-b border-border">
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {dayGroups.map((dg, i) => (
+                <button key={dg.day} onClick={() => setSelectedDay(i)} className={cn(
+                  "flex flex-col items-center px-4 py-2 rounded-xl transition-all shrink-0",
+                  selectedDay === i ? "bg-gradient-to-br from-[var(--aurora-start)] to-[var(--aurora-end)] text-white shadow-lg" : "hover:bg-white/10"
+                )}>
+                  <span className="text-xs font-medium">Hari {dg.day}</span>
+                  <span className="text-[10px] opacity-70">{dg.items.length} item{dg.items.length !== 1 ? "s" : ""}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Destinations List */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {itemsLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-6 h-6 animate-spin text-[var(--aurora-start)]" />
+            </div>
+          ) : currentDay && currentDay.items.length > 0 ? (
+            <>
+              {currentDay.items.map((item, i) => (
+                <DestinationCard key={item.id} item={item} dayIndex={selectedDay} index={i} />
+              ))}
+            </>
+          ) : trips.length > 0 && selectedTrip ? (
+            /* No itinerary items yet */
+            <div className="text-center py-8 text-muted-foreground">
+              <MapIcon className="w-10 h-10 mx-auto mb-3 opacity-20" />
+              <p className="text-sm font-medium mb-1">Belum ada itinerary</p>
+              <p className="text-xs opacity-70 mb-4">Generate itinerary dengan AI atau tambah manual</p>
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage("ai")}>
+                <Plane className="w-4 h-4 mr-2" />Generate dengan AI
+              </Button>
+            </div>
+          ) : (
+            /* No trip selected */
+            <div className="text-center py-8 text-muted-foreground">
+              <MapIcon className="w-10 h-10 mx-auto mb-3 opacity-20" />
+              <p className="text-sm">Pilih atau buat trip untuk mulai</p>
+            </div>
+          )}
+
+          {currentDay && currentDay.items.length > 0 && (
+            <Button variant="glass" className="w-full" size="lg">
+              <Plus className="w-4 h-4 mr-2" />Tambah Destinasi
+            </Button>
+          )}
+        </div>
+
+        {/* Bottom Stats (from real data) */}
+        {dayGroups.length > 0 && (
+          <div className="p-4 border-t border-border bg-card/50">
+            <div className="grid grid-cols-2 gap-4 text-center">
+              <div>
+                <div className="text-lg font-bold gradient-text">{totalDestinations}</div>
+                <div className="text-xs text-muted-foreground">Destinasi</div>
+              </div>
+              <div>
+                <div className="text-lg font-bold text-[var(--coral-accent)]">
+                  {dayGroups.length} hari
+                </div>
+                <div className="text-xs text-muted-foreground">Total Trip</div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Right — Map ── */}
+      <div className="flex-1 relative">
+        <div className="absolute top-4 left-4 right-4 z-10 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {/* Expand sidebar toggle */}
+            <Button
+              variant="glass"
+              size="sm"
+              onClick={onToggleSidebar}
+              aria-label="Perluas sidebar"
+              className={sidebarCollapsed ? "bg-white/20" : ""}
+            >
+              <ChevronRight className={`w-4 h-4 rotate-180 ${sidebarCollapsed ? "" : "opacity-60"}`} />
+              <span className="ml-1 text-sm">{sidebarCollapsed ? "Lihat Trip" : "Persempit"}</span>
+            </Button>
+            <Button variant="glass" size="sm" className={mapView === "day" ? "bg-white/20" : ""} onClick={() => setMapView("day")}>
+              <Layers className="w-4 h-4 mr-1" />Hari Ini
+            </Button>
+            <Button variant="glass" size="sm" className={mapView === "full" ? "bg-white/20" : ""} onClick={() => setMapView("full")}>
+              <MapIcon className="w-4 h-4 mr-1" />Semua Hari
+            </Button>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="glass" size="icon"><Settings className="w-4 h-4" /></Button>
+            <Button variant="glass" size="icon"><ExternalLink className="w-4 h-4" /></Button>
+            <Button variant="gradient" size="sm"><Eye className="w-4 h-4 mr-1" />Preview Trip</Button>
+          </div>
+        </div>
+
+        {/* Map */}
+        {selectedTrip && mapLocations.length > 0 ? (
+          <TripMap
+            locations={mapLocations}
+            height="100%"
+            zoom={13}
+          />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-ocean-900 to-ocean-950 text-white/60">
+            <MapIcon className="w-16 h-16 mb-4 opacity-30" />
+            <p className="text-lg font-medium">{selectedTrip ? "Belum ada lokasi di peta" : "Pilih trip untuk melihat peta"}</p>
+            <p className="text-sm text-white/40 mt-1">
+              {selectedTrip ? "Tambah destinasi atau generate dengan AI" : "Atau buat trip baru untuk memulai"}
+            </p>
+            {selectedTrip && (
+              <Button variant="gradient" size="sm" className="mt-4" onClick={() => setCurrentPage("ai")}>
+                <Plane className="w-4 h-4 mr-2" />Generate dengan AI
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

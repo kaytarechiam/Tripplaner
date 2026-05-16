@@ -1,0 +1,339 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* === TripPlanner Brand Variables === */
+    /* Aurora Travel Gradient System */
+    --aurora-start: #667eea;
+    --aurora-mid: #764ba2;
+    --aurora-end: #f093fb;
+    --ocean-deep: #1e40af;
+    --ocean-light: #0ea5e9;
+    --sunset-warm: #f97316;
+    --sunset-pink: #fda085;
+    --coral-accent: #f5576c;
+
+    /* Semantic Colors - High Contrast */
+    --background: 0 0% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 237 85% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 94%;
+    --muted-foreground: 215 16% 35%;
+    --accent: 33 100% 55%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 84% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 32% 88%;
+    --input: 214 32% 88%;
+    --ring: 237 85% 55%;
+    --radius: 1rem;
+
+    /* Glass Effect Variables */
+    --glass-bg: rgba(255, 255, 255, 0.85);
+    --glass-border: rgba(255, 255, 255, 0.4);
+    --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+  }
+
+  .dark {
+    --background: 222 47% 6%;
+    --foreground: 210 40% 98%;
+    --card: 222 47% 10%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 47% 10%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 237 85% 65%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217 33% 15%;
+    --muted-foreground: 215 20% 60%;
+    --accent: 33 100% 60%;
+    --accent-foreground: 222 47% 8%;
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217 33% 20%;
+    --input: 217 33% 20%;
+    --ring: 237 85% 65%;
+
+    --glass-bg: rgba(30, 30, 50, 0.85);
+    --glass-border: rgba(255, 255, 255, 0.15);
+    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading;
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--muted));
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground));
+    border-radius: 4px;
+  }
+
+  /* Text selection */
+  ::selection {
+    background: rgba(102, 126, 234, 0.25);
+    color: inherit;
+  }
+
+  /* Focus visible styles */
+  :focus-visible {
+    outline: 2px solid var(--aurora-start);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+}
+
+@layer components {
+  /* === Glassmorphism Card - High Contrast === */
+  .glass-card {
+    @apply bg-card/95 backdrop-blur-xl border border-border/50 rounded-2xl;
+    box-shadow: var(--glass-shadow), 0 1px 3px rgba(0,0,0,0.05);
+  }
+
+  .glass-card-hover {
+    @apply glass-card transition-all duration-300 cursor-pointer;
+  }
+
+  .glass-card-hover:hover {
+    @apply -translate-y-0.5 shadow-lg;
+    box-shadow: 0 20px 40px -10px rgba(102, 126, 234, 0.2);
+    border-color: rgba(102, 126, 234, 0.3);
+  }
+
+  /* === Gradient Text === */
+  .gradient-text {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, var(--aurora-start), var(--aurora-mid), var(--aurora-end));
+  }
+
+  .gradient-text-sunset {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #f97316, #f5576c, #fda085);
+  }
+
+  .gradient-text-ocean {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #0ea5e9, #3b82f6, #667eea);
+  }
+
+  /* === Gradient Button === */
+  .btn-gradient {
+    @apply relative inline-flex items-center justify-center font-semibold rounded-xl transition-all duration-300 overflow-hidden;
+    background: linear-gradient(135deg, var(--aurora-start), var(--aurora-mid), var(--aurora-end));
+    background-size: 200% 200%;
+    @apply hover:shadow-lg;
+    animation: gradient-shift 8s ease infinite;
+  }
+
+  .btn-gradient-sunset {
+    @apply relative inline-flex items-center justify-center font-semibold rounded-xl transition-all duration-300 overflow-hidden;
+    background: linear-gradient(135deg, #f97316, #f5576c, #f97316);
+    background-size: 200% 200%;
+    @apply hover:shadow-lg;
+    animation: gradient-shift 8s ease infinite;
+  }
+
+  /* === Aurora Background - Solid Base === */
+  .aurora-bg {
+    @apply relative overflow-hidden;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 40%, #f093fb 70%, #f97316 100%);
+    background-size: 400% 400%;
+    animation: gradient-shift 15s ease infinite;
+  }
+
+  .aurora-bg::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at 20% 20%, rgba(255, 255, 255, 0.2) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 80%, rgba(102, 126, 234, 0.4) 0%, transparent 50%),
+      radial-gradient(ellipse at 50% 50%, rgba(240, 147, 251, 0.3) 0%, transparent 60%);
+    animation: aurora 20s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  .aurora-bg-mesh {
+    @apply relative;
+    background-color: hsl(var(--background));
+    background-image:
+      radial-gradient(at 40% 20%, hsla(237, 85%, 65%, 0.15) 0px, transparent 50%),
+      radial-gradient(at 80% 0%, hsla(330, 80%, 60%, 0.1) 0px, transparent 50%),
+      radial-gradient(at 0% 50%, hsla(30, 90%, 60%, 0.15) 0px, transparent 50%),
+      radial-gradient(at 80% 50%, hsla(200, 60%, 50%, 0.1) 0px, transparent 50%),
+      radial-gradient(at 0% 100%, hsla(270, 60%, 60%, 0.15) 0px, transparent 50%);
+  }
+
+  /* === Badge / Tag - High Contrast === */
+  .badge-aurora {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold;
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.15), rgba(118, 75, 162, 0.15));
+    border: 1px solid rgba(102, 126, 234, 0.4);
+    color: #4f46e5;
+  }
+
+  .badge-sunset {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold;
+    background: linear-gradient(135deg, rgba(249, 115, 22, 0.12), rgba(245, 87, 108, 0.12));
+    border: 1px solid rgba(245, 87, 108, 0.4);
+    color: #ea580c;
+  }
+
+  .badge-ocean {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold;
+    background: linear-gradient(135deg, rgba(14, 165, 233, 0.12), rgba(59, 130, 246, 0.12));
+    border: 1px solid rgba(14, 165, 233, 0.4);
+    color: #0284c7;
+  }
+
+  /* === Card Variants === */
+  .card-stat {
+    @apply bg-card border border-border/50 rounded-2xl p-6 flex flex-col justify-between h-full shadow-sm;
+  }
+
+  .card-trip {
+    @apply bg-card border border-border/50 rounded-2xl p-5 cursor-pointer h-full shadow-sm transition-all duration-300;
+  }
+
+  .card-trip:hover {
+    @apply shadow-md -translate-y-0.5;
+    border-color: rgba(102, 126, 234, 0.3);
+  }
+
+  .card-guide {
+    @apply bg-card border border-border/50 rounded-2xl p-4 cursor-pointer shadow-sm transition-all duration-300;
+  }
+
+  /* === Destination Card === */
+  .destination-card {
+    @apply bg-card border border-border/50 rounded-2xl p-5 cursor-pointer shadow-sm transition-all duration-300;
+  }
+
+  .destination-card:hover {
+    @apply shadow-md -translate-y-0.5;
+    border-color: rgba(102, 126, 234, 0.3);
+  }
+
+  /* === Weather Badge === */
+  .weather-badge {
+    @apply flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium;
+    backdrop-filter: blur(8px);
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    color: #374151;
+  }
+
+  /* === Map Marker === */
+  .map-marker {
+    @apply flex items-center justify-center w-8 h-8 rounded-full text-white font-bold text-sm;
+    background: linear-gradient(135deg, var(--aurora-start), var(--aurora-mid));
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.5);
+    border: 2px solid white;
+  }
+
+  .map-marker-day-1 { background: linear-gradient(135deg, #f97316, #f5576c); box-shadow: 0 4px 12px rgba(245, 87, 108, 0.5); }
+  .map-marker-day-2 { background: linear-gradient(135deg, #0ea5e9, #3b82f6); box-shadow: 0 4px 12px rgba(14, 165, 233, 0.5); }
+  .map-marker-day-3 { background: linear-gradient(135deg, #667eea, #764ba2); box-shadow: 0 4px 12px rgba(102, 126, 234, 0.5); }
+  .map-marker-day-4 { background: linear-gradient(135deg, #22c55e, #16a34a); box-shadow: 0 4px 12px rgba(34, 197, 94, 0.5); }
+
+  /* === Conflict Warning === */
+  .conflict-warning {
+    @apply flex items-start gap-3 p-4 rounded-xl border;
+    background: rgba(239, 68, 68, 0.08);
+    border-color: rgba(239, 68, 68, 0.2);
+  }
+
+  /* === Split Bill Row === */
+  .split-row {
+    @apply flex items-center justify-between py-3 px-4 rounded-xl transition-colors;
+  }
+
+  .split-row:hover {
+    @apply bg-muted/50;
+  }
+
+  /* === Floating Orb === */
+  .orb {
+    @apply absolute rounded-full pointer-events-none;
+  }
+
+  .orb-1 {
+    @apply w-96 h-96;
+    background: radial-gradient(circle, rgba(102, 126, 234, 0.4), transparent 70%);
+    top: -10%;
+    right: -5%;
+    filter: blur(60px);
+    animation: float 8s ease-in-out infinite;
+  }
+
+  .orb-2 {
+    @apply w-64 h-64;
+    background: radial-gradient(circle, rgba(240, 147, 251, 0.4), transparent 70%);
+    bottom: 10%;
+    left: -5%;
+    filter: blur(60px);
+    animation: float 8s ease-in-out infinite;
+  }
+
+  .orb-3 {
+    @apply w-80 h-80;
+    background: radial-gradient(circle, rgba(14, 165, 233, 0.3), transparent 70%);
+    top: 30%;
+    left: 30%;
+    filter: blur(60px);
+    animation: float 8s ease-in-out infinite;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .backdrop-blur-glass {
+    backdrop-filter: blur(16px) saturate(180%);
+  }
+
+  /* Ensure text is always readable */
+  .text-on-dark {
+    color: #ffffff;
+  }
+
+  .text-on-light {
+    color: #1f2937;
+  }
+}

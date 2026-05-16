@@ -1,0 +1,143 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-05-16T00:00:00.000Z",
+  "title": "Design System: TripPlanner",
+  "extensions": {
+    "colorMeta": {
+      "aurora-start": { "role": "primary", "displayName": "Twilight Sail Purple", "canonical": "#667eea", "tonalRamp": ["#eef0fc", "#d5d8f5", "#b5b9ee", "#9399e6", "#7179de", "#667eea", "#5a71d4", "#4d62b9", "#41539f"] },
+      "aurora-mid": { "role": "primary", "displayName": "Twilight Sail Mid", "canonical": "#764ba2", "tonalRamp": ["#f3eaf8", "#e5d0f0", "#cfa8e3", "#b984d6", "#a265c9", "#764ba2", "#694092", "#5b3582", "#4e2b72"] },
+      "aurora-end": { "role": "primary", "displayName": "Twilight Sail Pink", "canonical": "#f093fb", "tonalRamp": ["#fff0fe", "#fdd5fd", "#fab3fb", "#f790f9", "#f46ff6", "#f093fb", "#dd84e4", "#c675cd", "#af67b6"] },
+      "ocean-light": { "role": "tertiary", "displayName": "Ocean Sky Blue", "canonical": "#0ea5e9", "tonalRamp": ["#e0f5fd", "#b3e6f9", "#80d5f5", "#4dc3f1", "#1ab2ed", "#0ea5e9", "#0d96d0", "#0c87b7", "#0b779e"] },
+      "sunset-warm": { "role": "secondary", "displayName": "Sunset Amber", "canonical": "#f97316", "tonalRamp": ["#fff2e6", "#fee1c0", "#fdce9a", "#fcbb74", "#fbaa4e", "#f97316", "#e5670d", "#cb5e0a", "#b25308"] },
+      "coral-accent": { "role": "secondary", "displayName": "Coral Blush", "canonical": "#f5576c", "tonalRamp": ["#fde8eb", "#fbccd4", "#f8a8bb", "#f584a2", "#f26289", "#f5576c", "#de4b60", "#c64255", "#ae394b"] },
+      "surface-base": { "role": "neutral", "displayName": "Horizon White", "canonical": "hsl(0 0% 98%)", "tonalRamp": ["#ffffff", "#fafafa", "#f5f5f5", "#f0f0f0", "#e8e8e8", "#dcdcdc", "#c4c4c4", "#a8a8a8", "#8c8c8c"] },
+      "text-primary": { "role": "neutral", "displayName": "Ink Black", "canonical": "hsl(222 47% 11%)", "tonalRamp": ["#3d4452", "#343848", "#2b2d3e", "#222235", "#1a1b2b", "#131421", "#0d0e18", "#08090f", "#030406"] },
+      "text-muted": { "role": "neutral", "displayName": "Slate Muted", "canonical": "hsl(215 16% 35%)", "tonalRamp": ["#687089", "#5d647d", "#525971", "#474e65", "#3d4359", "#34384d", "#2a2d41", "#212236", "#17182a"] },
+      "border": { "role": "neutral", "displayName": "Silver Mist", "canonical": "hsl(214 32% 88%)", "tonalRamp": ["#f8f9fb", "#edf0f5", "#e2e5eb", "#d7dae1", "#cccfd7", "#c1c4cd", "#b0b3be", "#9fa2af", "#8e91a0"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Hero headlines, page titles. Satoshi 700." },
+      "heading": { "displayName": "Heading", "purpose": "Section headings, card titles. Satoshi 600." },
+      "body": { "displayName": "Body", "purpose": "Paragraph text, descriptions. Inter 400." },
+      "label": { "displayName": "Label", "purpose": "Badges, tags, metadata. Inter 500." }
+    },
+    "shadows": [
+      { "name": "card", "value": "0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.1)", "purpose": "Card at rest. Nearly invisible — white surface is the elevation signal." },
+      { "name": "card-md", "value": "0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06)", "purpose": "Card on hover. Adds presence without drama." },
+      { "name": "card-lg", "value": "0 10px 15px rgba(0,0,0,0.1), 0 4px 6px rgba(0,0,0,0.05)", "purpose": "Modals and dialogs. The heaviest shadow in the system." },
+      { "name": "glass", "value": "0 8px 32px rgba(31, 38, 135, 0.15)", "purpose": "Glass-morphism elements. Rare and purposeful only." },
+      { "name": "glow-aurora", "value": "0 0 40px rgba(102, 126, 234, 0.4)", "purpose": "Focused accent glow. Used sparingly." }
+    ],
+    "motion": [
+      { "name": "ease-out-quart", "value": "cubic-bezier(0.25, 1, 0.5, 1)", "purpose": "Default for hover transitions, entrances." },
+      { "name": "ease-standard", "value": "cubic-bezier(0.4, 0, 0.2, 1)", "purpose": "Standard state transitions." },
+      { "name": "duration-fast", "value": "150ms", "purpose": "Micro-interactions, toggles." },
+      { "name": "duration-base", "value": "300ms", "purpose": "Default transition duration." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Default primary CTA button. Aurora gradient, white text, rounded-xl.",
+      "html": "<button class=\"ds-btn-primary\">Get Started</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; height: 44px; padding: 12px 24px; background: linear-gradient(135deg, #667eea, #764ba2, #f093fb); background-size: 200% 200%; color: #ffffff; font-family: Inter, sans-serif; font-weight: 500; font-size: 0.875rem; border: none; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.1); cursor: pointer; transition: transform 300ms cubic-bezier(0.25, 1, 0.5, 1), box-shadow 300ms ease; animation: gradient-shift 8s ease infinite; } .ds-btn-primary:hover { transform: scale(1.02); box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3); } .ds-btn-primary:active { transform: scale(0.98); } .ds-btn-primary:focus-visible { outline: 2px solid #667eea; outline-offset: 2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Secondary action button. Light surface, dark text.",
+      "html": "<button class=\"ds-btn-secondary\">Learn More</button>",
+      "css": ".ds-btn-secondary { display: inline-flex; align-items: center; justify-content: center; height: 44px; padding: 12px 24px; background: hsl(210 40% 96%); color: hsl(222 47% 11%); font-family: Inter, sans-serif; font-weight: 500; font-size: 0.875rem; border: none; border-radius: 16px; cursor: pointer; transition: background 150ms ease; } .ds-btn-secondary:hover { background: hsl(210 40% 91%); } .ds-btn-secondary:focus-visible { outline: 2px solid #667eea; outline-offset: 2px; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Ghost button for tertiary actions. Transparent, muted text.",
+      "html": "<button class=\"ds-btn-ghost\">Cancel</button>",
+      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; justify-content: center; height: 36px; padding: 8px 16px; background: transparent; color: hsl(215 16% 35%); font-family: Inter, sans-serif; font-weight: 500; font-size: 0.875rem; border: none; border-radius: 16px; cursor: pointer; transition: background 150ms ease; } .ds-btn-ghost:hover { background: hsl(210 40% 94%); color: hsl(222 47% 11%); } .ds-btn-ghost:focus-visible { outline: 2px solid #667eea; outline-offset: 2px; }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card-default",
+      "description": "Default card container. White surface, subtle border, rounded-xl.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-header\">Trip Title</div><div class=\"ds-card-body\">Trip description goes here.</div></div>",
+      "css": ".ds-card { background: hsl(0 0% 100%); border: 1px solid hsl(214 32% 88%); border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.1); padding: 16px; transition: border-color 300ms ease, box-shadow 300ms ease, transform 300ms cubic-bezier(0.25, 1, 0.5, 1); } .ds-card:hover { border-color: rgba(102, 126, 234, 0.3); box-shadow: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06); transform: translateY(-2px); } .ds-card-header { font-family: Satoshi, Inter, sans-serif; font-weight: 600; font-size: 1.125rem; color: hsl(222 47% 11%); margin-bottom: 8px; } .ds-card-body { font-family: Inter, sans-serif; font-weight: 400; font-size: 0.9375rem; color: hsl(215 16% 35%); line-height: 1.6; }"
+    },
+    {
+      "name": "Input Field",
+      "kind": "input",
+      "refersTo": "input-default",
+      "description": "Default text input. White background, border, rounded-xl.",
+      "html": "<input class=\"ds-input\" type=\"text\" placeholder=\"Enter your destination...\" />",
+      "css": ".ds-input { width: 100%; height: 44px; padding: 12px 16px; background: hsl(0 0% 100%); border: 1px solid hsl(214 32% 88%); border-radius: 16px; font-family: Inter, sans-serif; font-weight: 400; font-size: 0.9375rem; color: hsl(222 47% 11%); outline: none; transition: border-color 150ms ease, box-shadow 150ms ease; box-sizing: border-box; } .ds-input::placeholder { color: hsl(215 16% 35%); } .ds-input:focus { border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2); } .ds-input:disabled { opacity: 0.5; cursor: not-allowed; }"
+    },
+    {
+      "name": "Navigation Bar",
+      "kind": "nav",
+      "refersTo": "nav-default",
+      "description": "Fixed top navigation. Glass-card backdrop, gradient-active state.",
+      "html": "<nav class=\"ds-nav\"><div class=\"ds-nav-logo\">TripPlanner</div><div class=\"ds-nav-items\"><div class=\"ds-nav-item ds-nav-item-active\">Dashboard</div><div class=\"ds-nav-item\">Trips</div></div></nav>",
+      "css": ".ds-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 50; display: flex; align-items: center; justify-content: space-between; height: 64px; padding: 0 24px; background: rgba(255,255,255,0.85); backdrop-filter: blur(16px); border-bottom: 1px solid hsl(214 32% 88%); } .ds-nav-logo { font-family: Satoshi, Inter, sans-serif; font-weight: 700; font-size: 1.125rem; background: linear-gradient(135deg, #667eea, #764ba2, #f093fb); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; } .ds-nav-item { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 12px; font-family: Inter, sans-serif; font-weight: 500; font-size: 0.875rem; color: hsl(215 16% 35%); cursor: pointer; transition: background 150ms ease, color 150ms ease; } .ds-nav-item:hover { background: hsl(210 40% 94%); color: hsl(222 47% 11%); } .ds-nav-item-active { background: linear-gradient(135deg, #667eea, #764ba2, #f093fb); color: #ffffff; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3); }"
+    },
+    {
+      "name": "Aurora Badge",
+      "kind": "chip",
+      "refersTo": "badge-aurora",
+      "description": "Category/tag badge with aurora tint. Pill-shaped.",
+      "html": "<span class=\"ds-badge-aurora\">Adventure</span>",
+      "css": ".ds-badge-aurora { display: inline-flex; align-items: center; padding: 4px 12px; background: rgba(102, 126, 234, 0.12); border: 1px solid rgba(102, 126, 234, 0.4); border-radius: 9999px; font-family: Inter, sans-serif; font-weight: 600; font-size: 0.75rem; color: #4f46e5; }"
+    },
+    {
+      "name": "Sunset Badge",
+      "kind": "chip",
+      "refersTo": "badge-sunset",
+      "description": "Sunset/warm badge. Pill-shaped, warm orange tint.",
+      "html": "<span class=\"ds-badge-sunset\">Trending</span>",
+      "css": ".ds-badge-sunset { display: inline-flex; align-items: center; padding: 4px 12px; background: rgba(249, 115, 22, 0.12); border: 1px solid rgba(245, 87, 108, 0.4); border-radius: 9999px; font-family: Inter, sans-serif; font-weight: 600; font-size: 0.75rem; color: #ea580c; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Warm Horizon",
+    "overview": "TripPlanner feels like the moment before a trip begins: the excitement of planning, the clarity of knowing exactly where you're going, and the warmth of doing it with people you care about. The interface doesn't feel like software — it feels like opening a map on a sunlit morning. Every screen rewards curiosity and keeps momentum. Warmth through restraint: soft color palette with purposeful accent use. Never corporate-speak, never enterprise-software.",
+    "keyCharacteristics": [
+      "Tonal surface layering (no heavy shadows); depth comes from lightness steps",
+      "Aurora gradient as accent voice, not background noise",
+      "Generous radius (12–16px) for approachable, tactile components",
+      "Motion is responsive and purposeful — enters/exits feel natural, not theatrical",
+      "Layout breathes with variable spacing; never uniform padding everywhere"
+    ],
+    "rules": [
+      { "name": "The Accent Scarcity Rule", "body": "The Aurora gradient appears on ≤15% of any screen. Its power comes from restraint.", "section": "colors" },
+      { "name": "The Flat-By-Default Rule", "body": "Surfaces are flat at rest. Shadows appear only as a response to state (hover, focus, elevation).", "section": "elevation" }
+    ],
+    "dos": [
+      "Do use the Aurora gradient as an accent voice, not decoration. One decisive gradient use beats three timid ones.",
+      "Do use tonal surface differences to communicate depth. White card on near-white background is enough.",
+      "Do use generous radius (12–16px) consistently. It communicates warmth and approachability.",
+      "Do use motion for feedback and orientation. Hover transitions, stagger entrances, smooth page changes.",
+      "Do design for the squint test: primary action and secondary grouping should be obvious when blurred.",
+      "Do use real imagery for destinations and trips. A photo of an actual place beats a gradient placeholder."
+    ],
+    "donts": [
+      "Don't use purple/aurora gradient as a background wash across entire sections. The gradient is an accent, not a canvas.",
+      "Don't use glassmorphism decoratively. Frosted glass cards used because they look 'modern' are banned.",
+      "Don't use dark glass-morphism themes. TripPlanner is light and bright; depth comes from tonal layering.",
+      "Don't use identical card grids (icon + heading + text, repeated). Cards should have distinct content, not identical structure.",
+      "Don't use gradient text for headings. Use solid color emphasis via weight and scale.",
+      "Don't use side-stripe borders (colored border-left > 1px as accent on cards or alerts).",
+      "Don't use heavy shadows on resting elements. Resting cards should be nearly flat; only hovered/elevated elements gain shadow.",
+      "Don't use pure black or pure white as text colors. Use hsl(222 47% 11%) for primary text."
+    ]
+  }
+}
