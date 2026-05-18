@@ -143,10 +143,10 @@ function AddPlaceModal({ onAdded, triggerRef }: { onAdded: () => void; triggerRe
 }
 
 interface BucketListProps {
-  setCurrentPage: (page: Page) => void
+  navigateTo: (page: Page) => void
 }
 
-export function BucketList({ setCurrentPage }: BucketListProps) {
+export function BucketList({ navigateTo }: BucketListProps) {
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [searchQuery, setSearchQuery] = useState("")
   const [realItems, setRealItems] = useState<BucketListItem[]>([])

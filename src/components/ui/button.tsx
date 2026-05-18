@@ -10,7 +10,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-primary text-primary-foreground shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:scale-[1.02] active:scale-[0.98]",
+          "bg-gradient-to-r from-[var(--aurora-start)] to-[var(--aurora-end)] text-primary-foreground shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:scale-[1.02] active:scale-[0.98] hover:brightness-110",
         destructive:
           "bg-destructive text-destructive-foreground shadow-lg shadow-destructive/25 hover:shadow-destructive/40",
         outline:
@@ -20,9 +20,9 @@ const buttonVariants = cva(
         ghost: "hover:bg-accent/10 hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
         gradient:
-          "text-white shadow-lg shadow-primary/30 hover:shadow-primary/50 hover:scale-[1.02] active:scale-[0.98]",
+          "bg-gradient-to-r from-[var(--aurora-start)] via-[var(--aurora-mid)] to-[var(--aurora-end)] text-white shadow-lg shadow-primary/30 hover:shadow-primary/50 hover:scale-[1.02] active:scale-[0.98] hover:brightness-110",
         "gradient-sunset":
-          "text-white shadow-lg shadow-sunset/30 hover:shadow-sunset/50 hover:scale-[1.02] active:scale-[0.98]",
+          "bg-gradient-to-r from-orange-500 via-rose-500 to-pink-500 text-white shadow-lg shadow-sunset/30 hover:shadow-sunset/50 hover:scale-[1.02] active:scale-[0.98] hover:brightness-110",
         glass:
           "glass-card text-foreground hover:bg-white/20 border-white/20 hover:border-white/40",
       },

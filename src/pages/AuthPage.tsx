@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { signIn, signUp } from "../lib/supabase"
 import { motion } from "framer-motion"
 import {
@@ -20,54 +20,105 @@ import { cn } from "@/lib/utils"
 type Page = "landing" | "login" | "register" | "home" | "editor" | "ai" | "splitbill" | "explore" | "profile" | "achievements" | "bucketlist" | "settings" | "notifications"
 
 interface AppProps {
-  setCurrentPage: (page: Page) => void
+  navigateTo: (page: Page) => void
   isLoggedIn: boolean
   user: any
 }
 
-export function LandingPage({ setCurrentPage, isLoggedIn, user }: AppProps) {
+export function LandingPage({ navigateTo, isLoggedIn, user }: AppProps) {
+  const parallaxRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (!parallaxRef.current) return
+      const scrollY = window.scrollY
+
+      // Parallax + Zoom effect: translate slower + scale up + focus on peak
+      const scale = 1 + (scrollY * 0.0004) // zoom from 1.0 to ~1.6x over full page
+      const translateY = scrollY * 0.35 // parallax movement
+      // Focus toward upper area of image (mountain peak area)
+      const posY = 30 + (scrollY * 0.06) // start at 30% (upper-middle), shift up to ~0% (top) as scroll
+
+      parallaxRef.current.style.transform = `translateY(${translateY}px) scale(${Math.min(scale, 1.6)})`
+      parallaxRef.current.style.setProperty('--fuji-pos', `${Math.min(posY, 5)}%`)
+    }
+
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)")
+    if (!mediaQuery.matches) {
+      window.addEventListener("scroll", handleScroll, { passive: true })
+    }
+
+    return () => window.removeEventListener("scroll", handleScroll)
+  }, [])
+
   return (
     <div className="min-h-screen">
-      {/* Navbar */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-b border-gray-200/50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3 cursor-pointer" onClick={() => {}}>
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[var(--aurora-start)] to-[var(--aurora-end)] flex items-center justify-center shadow-lg">
-                <svg viewBox="0 0 24 24" className="w-6 h-6 text-white" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 18 L12 6 L21 18 M7 14 L17 14" />
-                  <circle cx="12" cy="6" r="2" fill="currentColor" stroke="none" />
-                </svg>
-              </div>
-              <span className="font-heading font-bold text-lg gradient-text">TripPlanner</span>
-            </div>
+      {/* Parallax Mt. Fuji Background Layer - Single Clean Layer */}
+      <div
+        ref={parallaxRef}
+        className="fixed inset-0 z-0 pointer-events-none overflow-hidden"
+        style={{ top: "-20%", bottom: "-20%" }}
+      >
+        {/* Single Fuji Image with Opacity Fade */}
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage: "url(https://plus.unsplash.com/premium_photo-1690749740487-01bbb8e51e71?fm=jpg&q=80&w=1920)",
+            backgroundSize: "cover",
+            backgroundPosition: `center var(--fuji-pos, 30%)`,
+            opacity: 0.85,
+          }}
+        />
 
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setCurrentPage("login")}
-                className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
-              >
-                Masuk
-              </button>
-              <Button
-                variant="gradient"
-                size="sm"
-                onClick={() => setCurrentPage("register")}
-              >
-                Daftar Gratis
-              </Button>
+        {/* Gradient Overlays */}
+        {/* Top fade (warm white) */}
+        <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-white/60 via-white/20 to-transparent" />
+        {/* Bottom fade (dark) */}
+        <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-[#1a1a2e]/80 via-[#1a1a2e]/30 to-transparent" />
+        {/* Side vignette */}
+        <div className="absolute inset-0 bg-gradient-to-r from-white/40 via-transparent to-white/40" />
+        {/* Aurora color tint */}
+        <div className="absolute inset-0 bg-gradient-to-b from-[#667eea]/10 via-transparent to-[#f093fb]/10" />
+      </div>
+
+      {/* Content Layer */}
+      <div className="relative z-10">
+      {/* Navbar - Floating Centered Pill */}
+      <nav className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-4xl bg-white/60 backdrop-blur-2xl border border-white/40 rounded-2xl shadow-2xl shadow-black/10 ring-1 ring-white/20">
+        <div className="px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2 cursor-pointer" onClick={() => {}}>
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[var(--aurora-start)] to-[var(--aurora-end)] flex items-center justify-center shadow-md">
+              <svg viewBox="0 0 24 24" className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 18 L12 6 L21 18 M7 14 L17 14" />
+                <circle cx="12" cy="6" r="2" fill="currentColor" stroke="none" />
+              </svg>
             </div>
+            <span className="font-heading font-bold text-base gradient-text">TripPlanner</span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigateTo("login")}
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-xl hover:bg-black/5"
+            >
+              Masuk
+            </button>
+            <Button
+              variant="gradient"
+              size="sm"
+              onClick={() => navigateTo("register")}
+            >
+              Daftar Gratis
+            </Button>
           </div>
         </div>
       </nav>
 
-      {/* Hero Section */}
-      <section className="relative min-h-screen flex items-center bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 overflow-hidden pt-16">
-        <div className="absolute inset-0 opacity-40">
-          <div className="absolute top-20 left-20 w-72 h-72 bg-purple-300 rounded-full blur-3xl" />
-          <div className="absolute bottom-20 right-20 w-96 h-96 bg-pink-300 rounded-full blur-3xl" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-blue-300 rounded-full blur-3xl" />
-        </div>
+      {/* Hero Section - Aurora Brand */}
+      <section className="relative min-h-screen flex items-center aurora-bg-mesh overflow-hidden pt-16">
+        <div className="orb orb-1" />
+        <div className="orb orb-2" />
+        <div className="orb orb-3" />
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 relative z-10">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
@@ -96,7 +147,7 @@ export function LandingPage({ setCurrentPage, isLoggedIn, user }: AppProps) {
                 <Button
                   variant="gradient"
                   size="xl"
-                  onClick={() => setCurrentPage("register")}
+                  onClick={() => navigateTo("register")}
                   className="shadow-lg shadow-purple-500/30"
                 >
                   <Compass className="w-5 h-5 mr-2" />
@@ -107,7 +158,7 @@ export function LandingPage({ setCurrentPage, isLoggedIn, user }: AppProps) {
                 <Button
                   variant="outline"
                   size="xl"
-                  className="border-2 border-gray-300 text-gray-700 hover:bg-gray-100"
+                  className="border-2 border-white/30 text-foreground backdrop-blur-sm hover:bg-white/10"
                 >
                   <Play className="w-5 h-5 mr-2" />
                   Lihat Demo
@@ -145,13 +196,52 @@ export function LandingPage({ setCurrentPage, isLoggedIn, user }: AppProps) {
                 <h3 className="text-xl font-bold text-gray-900">3 Hari di Tokyo</h3>
                 <p className="text-sm text-gray-500"> oleh @traveljunkie</p>
 
-                <div className="aspect-video rounded-xl bg-gradient-to-br from-rose-400 via-purple-500 to-indigo-600 relative overflow-hidden">
-                  <div className="absolute bottom-4 left-4 right-4 flex justify-between">
-                    <div className="bg-white/90 backdrop-blur-sm rounded-lg px-3 py-1.5">
-                      <span className="text-xs font-medium text-gray-700">📍 12 tempat</span>
+                <div className="aspect-video rounded-xl relative overflow-hidden">
+                  {/* Tokyo Cityscape Image */}
+                  <img
+                    src="https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=800&q=80"
+                    alt="Tokyo cityscape at night"
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+
+                  {/* Gradient Overlay - bottom to top for text readability */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+
+                  {/* Animated Floating Location Pins */}
+                  <div className="absolute top-4 left-4 flex items-center gap-1.5">
+                    <div className="w-7 h-7 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30">
+                      <MapPin className="w-3.5 h-3.5 text-white" />
                     </div>
-                    <div className="bg-white/90 backdrop-blur-sm rounded-lg px-3 py-1.5">
-                      <span className="text-xs font-medium text-gray-700">❤️ 234 likes</span>
+                    <span className="text-white text-xs font-medium bg-black/40 backdrop-blur-sm rounded-full px-2.5 py-1">Tokyo, Jepang</span>
+                  </div>
+
+                  {/* Top Right - Trip Type Badge */}
+                  <div className="absolute top-4 right-4">
+                    <div className="px-3 py-1.5 rounded-full bg-white/15 backdrop-blur-md border border-white/20 text-white text-xs font-semibold">
+                      🗼 City Trip
+                    </div>
+                  </div>
+
+                  {/* Bottom Stats Overlay */}
+                  <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="bg-white/90 backdrop-blur-md rounded-lg px-3 py-1.5 flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-rose-500" />
+                        <span className="text-xs font-semibold text-gray-800">12 tempat</span>
+                      </div>
+                      <div className="bg-white/90 backdrop-blur-md rounded-lg px-3 py-1.5 flex items-center gap-1.5">
+                        <svg className="w-3.5 h-3.5 text-rose-500" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                        </svg>
+                        <span className="text-xs font-semibold text-gray-800">234</span>
+                      </div>
+                    </div>
+
+                    {/* Trip Duration Badge */}
+                    <div className="bg-white/90 backdrop-blur-md rounded-lg px-3 py-1.5 flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-rose-500" />
+                      <span className="text-xs font-semibold text-gray-800">3 Hari</span>
                     </div>
                   </div>
                 </div>
@@ -212,20 +302,15 @@ export function LandingPage({ setCurrentPage, isLoggedIn, user }: AppProps) {
       {/* Features Section */}
       <section className="py-24 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="text-center mb-16"
-          >
+          <div className="text-center mb-16">
             <Badge variant="aurora" className="mb-4">Fitur Unggulan</Badge>
-            <h2 className="text-4xl md:text-5xl font-black mb-4">
+            <h2 className="text-4xl md:text-5xl font-black mb-4 text-foreground">
               Semua yang kamu butuhkan<br />
               <span className="gradient-text">untuk trip sempurna</span>
             </h2>
-          </motion.div>
+          </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
             {[
               {
                 icon: Map,
@@ -262,14 +347,14 @@ export function LandingPage({ setCurrentPage, isLoggedIn, user }: AppProps) {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.1 }}
-                className="bg-white rounded-2xl p-6 space-y-4 shadow-lg border border-gray-100"
+                className="p-5 space-y-3 hover:scale-[1.02] transition-transform bg-white/70 backdrop-blur-2xl border border-white/40 rounded-2xl shadow-lg"
               >
-                <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${feature.color} flex items-center justify-center shadow-lg`}>
-                  <feature.icon className="w-7 h-7 text-white" />
+                <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${feature.color} flex items-center justify-center shadow-lg`}>
+                  <feature.icon className="w-6 h-6 text-white" />
                 </div>
-                <h3 className="font-bold text-lg text-gray-900">{feature.title}</h3>
-                <p className="text-sm text-gray-600">{feature.desc}</p>
-                <p className="text-xs text-gray-400 font-medium">{feature.stat}</p>
+                <h3 className="font-bold text-base text-foreground">{feature.title}</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">{feature.desc}</p>
+                <p className="text-xs text-muted-foreground/70 font-medium">{feature.stat}</p>
               </motion.div>
             ))}
           </div>
@@ -277,7 +362,7 @@ export function LandingPage({ setCurrentPage, isLoggedIn, user }: AppProps) {
       </section>
 
       {/* How It Works */}
-      <section className="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-purple-600 via-purple-700 to-pink-600">
+      <section className="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-violet-100 via-fuchsia-50 to-pink-100">
         <div className="max-w-7xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -285,15 +370,17 @@ export function LandingPage({ setCurrentPage, isLoggedIn, user }: AppProps) {
             viewport={{ once: true }}
             className="text-center mb-16"
           >
-            <Badge variant="sunset" className="mb-4">Proses Mudah</Badge>
-            <h2 className="text-4xl md:text-5xl font-black text-white mb-4">
+            <div className="inline-flex items-center rounded-full px-4 py-2 bg-white/60 backdrop-blur-md border border-white/40 mb-4 shadow-sm">
+              <Badge variant="aurora" className="border-0">Proses Mudah</Badge>
+            </div>
+            <h2 className="text-4xl md:text-5xl font-black mb-4 text-foreground">
               Cara Kerja TripPlanner
             </h2>
           </motion.div>
 
           <div className="grid md:grid-cols-3 gap-8">
             {[
-              { step: 1, title: "Buat Trip", desc: "Pilih tujuan, tanggal, dan ajak teman untuk一起 merencanakan", icon: Compass },
+              { step: 1, title: "Buat Trip", desc: "Pilih tujuan, tanggal, dan ajak teman untuk merencanakan perjalanan bersama", icon: Compass },
               { step: 2, title: "Generate AI", desc: "Biarkan AI membuat itinerary optimal dalam hitungan detik", icon: Sparkles },
               { step: 3, title: "Jelajahi", desc: "Bagikan trip kamu ke komunitas atau pesan guide lokal", icon: Globe },
             ].map((item, i) => (
@@ -305,14 +392,14 @@ export function LandingPage({ setCurrentPage, isLoggedIn, user }: AppProps) {
                 transition={{ delay: i * 0.15 }}
                 className="text-center"
               >
-                <div className="w-20 h-20 rounded-2xl bg-white/20 flex items-center justify-center mx-auto mb-6 relative backdrop-blur-sm">
-                  <item.icon className="w-10 h-10 text-white" />
+                <div className="w-20 h-20 rounded-2xl bg-white/80 backdrop-blur-xl flex items-center justify-center mx-auto mb-6 relative shadow-lg border border-white/40">
+                  <item.icon className="w-10 h-10 text-[var(--aurora-start)]" />
                   <div className="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-sm font-bold text-white shadow-lg">
                     {item.step}
                   </div>
                 </div>
-                <h3 className="text-xl font-bold text-white mb-2">{item.title}</h3>
-                <p className="text-white/80">{item.desc}</p>
+                <h3 className="text-xl font-bold text-foreground mb-2">{item.title}</h3>
+                <p className="text-muted-foreground">{item.desc}</p>
               </motion.div>
             ))}
           </div>
@@ -329,13 +416,13 @@ export function LandingPage({ setCurrentPage, isLoggedIn, user }: AppProps) {
             className="text-center mb-12"
           >
             <Badge variant="ocean" className="mb-4">Testimoni</Badge>
-            <h2 className="text-4xl md:text-5xl font-black mb-4">
+            <h2 className="text-4xl md:text-5xl font-black mb-4 text-foreground">
               Dipakai oleh traveler<br />
               <span className="gradient-text">di seluruh Indonesia</span>
             </h2>
           </motion.div>
 
-          <div className="grid md:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-3 gap-5">
             {[
               { name: "Rina Susanti", avatar: "RS", location: "Jakarta", text: "TripPlanner bikin planning bareng teman jadi mudah banget! Fitur AI-nya keren, hemat waktu.", rating: 5 },
               { name: "Budi Prasetyo", avatar: "BP", location: "Bandung", text: "Split billnya sangat membantu grup kami. Tidak ada lagi drama pembagian tagihan!", rating: 5 },
@@ -347,21 +434,21 @@ export function LandingPage({ setCurrentPage, isLoggedIn, user }: AppProps) {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.1 }}
-                className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100"
+                className="glass-card p-5 space-y-4"
               >
-                <div className="flex items-center gap-3 mb-4">
-                  <Avatar className="w-12 h-12">
-                    <AvatarFallback className="bg-gradient-to-br from-[var(--aurora-start)] to-[var(--aurora-end)] text-white">
+                <div className="flex items-center gap-3 mb-3">
+                  <Avatar className="w-11 h-11">
+                    <AvatarFallback className="bg-gradient-to-br from-[var(--aurora-start)] to-[var(--aurora-end)] text-sm text-white">
                       {testi.avatar}
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <p className="font-semibold text-gray-900">{testi.name}</p>
-                    <p className="text-sm text-gray-500">{testi.location}</p>
+                    <p className="font-semibold text-sm text-foreground">{testi.name}</p>
+                    <p className="text-xs text-muted-foreground">{testi.location}</p>
                   </div>
                 </div>
-                <p className="text-gray-600 mb-4">{testi.text}</p>
-                <div className="flex gap-1">
+                <p className="text-sm text-muted-foreground leading-relaxed">"{testi.text}"</p>
+                <div className="flex gap-0.5">
                   {[...Array(testi.rating)].map((_, j) => (
                     <Star key={j} className="w-4 h-4 text-amber-400 fill-amber-400" />
                   ))}
@@ -373,7 +460,7 @@ export function LandingPage({ setCurrentPage, isLoggedIn, user }: AppProps) {
       </section>
 
       {/* CTA Section */}
-      <section className="py-32 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-blue-50 to-purple-50">
+      <section className="py-32 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto text-center space-y-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -388,7 +475,7 @@ export function LandingPage({ setCurrentPage, isLoggedIn, user }: AppProps) {
               Bergabung dengan 50.000+ traveler Indonesia. Gratis selamanya.
             </p>
             <div className="flex flex-wrap justify-center gap-4">
-              <Button variant="gradient" size="xl" onClick={() => setCurrentPage("register")} className="shadow-lg">
+              <Button variant="gradient" size="xl" onClick={() => navigateTo("register")} className="shadow-lg">
                 <Compass className="w-5 h-5 mr-2" />
                 Daftar Gratis Sekarang
               </Button>
@@ -418,6 +505,7 @@ export function LandingPage({ setCurrentPage, isLoggedIn, user }: AppProps) {
           </div>
         </div>
       </footer>
+      </div>{/* end content layer */}
     </div>
   )
 }
@@ -430,12 +518,12 @@ type AppUser = {
 }
 
 interface LoginPageProps {
-  setCurrentPage: (page: Page) => void
+  navigateTo: (page: Page) => void
   onLoginSuccess: (user: AppUser) => void
   supabaseConfigured: boolean
 }
 
-export function LoginPage({ setCurrentPage, onLoginSuccess, supabaseConfigured }: LoginPageProps) {
+export function LoginPage({ navigateTo, onLoginSuccess, supabaseConfigured }: LoginPageProps) {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
@@ -570,9 +658,8 @@ export function LoginPage({ setCurrentPage, onLoginSuccess, supabaseConfigured }
             </div>
 
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Password</Label>
-                <span className="text-xs text-muted-foreground italic">Belum tersedia</span>
+              <div className="flex items-center justify-end">
+                <button className="text-xs text-muted-foreground hover:text-foreground transition-colors">Lupa password?</button>
               </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -611,7 +698,7 @@ export function LoginPage({ setCurrentPage, onLoginSuccess, supabaseConfigured }
           <p className="text-center text-sm text-muted-foreground">
             Belum punya akun?{" "}
             <button
-              onClick={() => setCurrentPage("register")}
+              onClick={() => navigateTo("register")}
               className="font-semibold text-[var(--aurora-start)] hover:underline"
             >
               Daftar gratis
@@ -621,7 +708,7 @@ export function LoginPage({ setCurrentPage, onLoginSuccess, supabaseConfigured }
       </div>
 
       {/* Right - Decorative */}
-      <div className="hidden lg:flex flex-1 bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 items-center justify-center">
+      <div className="hidden lg:flex flex-1 aurora-bg-mesh items-center justify-center">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -640,12 +727,12 @@ export function LoginPage({ setCurrentPage, onLoginSuccess, supabaseConfigured }
 }
 
 interface RegisterPageProps {
-  setCurrentPage: (page: Page) => void
+  navigateTo: (page: Page) => void
   onLoginSuccess: (user: AppUser) => void
   supabaseConfigured: boolean
 }
 
-export function RegisterPage({ setCurrentPage, onLoginSuccess, supabaseConfigured }: RegisterPageProps) {
+export function RegisterPage({ navigateTo, onLoginSuccess, supabaseConfigured }: RegisterPageProps) {
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -777,7 +864,7 @@ export function RegisterPage({ setCurrentPage, onLoginSuccess, supabaseConfigure
                   className="w-full border-emerald-300 text-emerald-700 hover:bg-emerald-100"
                   onClick={() => {
                     setSuccess(false)
-                    setCurrentPage("login")
+                    navigateTo("login")
                   }}
                 >
                   <ArrowRight className="w-4 h-4 mr-2" />
@@ -862,7 +949,7 @@ export function RegisterPage({ setCurrentPage, onLoginSuccess, supabaseConfigure
           <p className="text-center text-sm text-muted-foreground">
             Sudah punya akun?{" "}
             <button
-              onClick={() => setCurrentPage("login")}
+              onClick={() => navigateTo("login")}
               className="font-semibold text-[var(--aurora-start)] hover:underline"
             >
               Masuk
@@ -872,7 +959,7 @@ export function RegisterPage({ setCurrentPage, onLoginSuccess, supabaseConfigure
       </div>
 
       {/* Right - Decorative */}
-      <div className="hidden lg:flex flex-1 bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 items-center justify-center">
+      <div className="hidden lg:flex flex-1 aurora-bg-mesh items-center justify-center">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}

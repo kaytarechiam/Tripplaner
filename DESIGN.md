@@ -15,24 +15,45 @@ colors:
   surface-card: "hsl(0 0% 100%)"
   text-primary: "hsl(222 47% 11%)"
   text-muted: "hsl(215 16% 35%)"
-  text-foreground: "hsl(222 47% 11%)"
   border: "hsl(214 32% 88%)"
-  input: "hsl(214 32% 88%)"
+  # Map route colors — satu warna per hari, konsisten di marker + polyline + sidebar chip
+  map-day-1: "#f97316"
+  map-day-2: "#0ea5e9"
+  map-day-3: "#10b981"
+  map-day-4: "#8b5cf6"
+  map-day-5: "#f59e0b"
+  map-day-6: "#ec4899"
+  map-day-7: "#14b8a6"
+  # Dark mode surfaces
+  dark-surface-base: "#0f0f1a"
+  dark-surface-card: "#1a1a2e"
+  dark-surface-overlay: "#1e1e32"
+  dark-border: "rgba(255,255,255,0.08)"
 typography:
   display:
     fontFamily: "Satoshi, Inter, sans-serif"
     fontWeight: 700
     lineHeight: 1.1
+    clamp: "clamp(2rem, 5vw, 3.5rem)"
   heading:
     fontFamily: "Satoshi, Inter, sans-serif"
     fontWeight: 600
+    lineHeight: 1.2
+  title:
+    fontFamily: "Satoshi, Inter, sans-serif"
+    fontWeight: 600
+    size: "1.125–1.25rem"
+    lineHeight: 1.3
   body:
     fontFamily: "Inter, DM Sans, sans-serif"
     fontWeight: 400
     lineHeight: 1.6
+    size: "0.9375rem"
+    maxLineLength: "70ch"
   label:
     fontFamily: "Inter, sans-serif"
     fontWeight: 500
+    size: "0.75–0.8125rem"
     letterSpacing: "0.01em"
 rounded:
   sm: "6px"
@@ -42,204 +63,673 @@ rounded:
   "2xl": "20px"
   full: "9999px"
 spacing:
-  sm: "4px"
-  md: "8px"
-  lg: "12px"
-  xl: "16px"
-  "2xl": "24px"
-  "3xl": "32px"
-  "4xl": "48px"
+  1: "4px"
+  2: "8px"
+  3: "12px"
+  4: "16px"
+  5: "20px"
+  6: "24px"
+  8: "32px"
+  10: "40px"
+  12: "48px"
+  16: "64px"
 components:
   button-primary:
-    backgroundColor: "linear-gradient(135deg, #667eea, #764ba2, #f093fb)"
+    background: "linear-gradient(135deg, #667eea, #764ba2, #f093fb)"
     textColor: "#ffffff"
-    rounded: "{rounded.xl}"
+    rounded: "16px"
     padding: "12px 24px"
-  button-primary-hover:
-    backgroundColor: "linear-gradient(135deg, #764ba2, #667eea)"
-    shadow: "0 8px 24px rgba(102, 126, 234, 0.3)"
-    transform: "scale(1.02)"
+    hover-shadow: "0 8px 24px rgba(102, 126, 234, 0.3)"
+    hover-transform: "scale(1.02)"
   button-secondary:
-    backgroundColor: "hsl(210 40% 96%)"
+    background: "hsl(210 40% 96%)"
     textColor: "hsl(222 47% 11%)"
-    rounded: "{rounded.xl}"
+    rounded: "16px"
   button-ghost:
-    backgroundColor: "transparent"
+    background: "transparent"
     textColor: "hsl(215 16% 35%)"
-    hoverBackgroundColor: "hsl(210 40% 94%)"
+    hover-background: "hsl(210 40% 94%)"
+  button-destructive:
+    background: "#f5576c"
+    textColor: "#ffffff"
   card-default:
-    backgroundColor: "hsl(0 0% 100%)"
+    background: "hsl(0 0% 100%)"
     border: "1px solid hsl(214 32% 88%)"
-    rounded: "{rounded.xl}"
+    rounded: "16px"
     shadow: "0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.1)"
   card-hover:
-    borderColor: "rgba(102, 126, 234, 0.3)"
+    border-color: "rgba(102, 126, 234, 0.3)"
     shadow: "0 10px 25px rgba(0,0,0,0.08)"
     transform: "translateY(-2px)"
   input-default:
-    borderColor: "hsl(214 32% 88%)"
-    backgroundColor: "hsl(0 0% 100%)"
-    rounded: "{rounded.xl}"
+    border: "1px solid hsl(214 32% 88%)"
+    background: "hsl(0 0% 100%)"
+    rounded: "16px"
     padding: "12px 16px"
-    focusRingColor: "rgba(102, 126, 234, 0.4)"
+    height: "44px"
+    focus-ring: "0 0 0 3px rgba(102, 126, 234, 0.2)"
   badge-aurora:
-    backgroundColor: "rgba(102, 126, 234, 0.12)"
-    borderColor: "rgba(102, 126, 234, 0.4)"
+    background: "rgba(102, 126, 234, 0.12)"
+    border: "1px solid rgba(102, 126, 234, 0.4)"
     textColor: "#4f46e5"
   badge-sunset:
-    backgroundColor: "rgba(249, 115, 22, 0.12)"
-    borderColor: "rgba(245, 87, 108, 0.4)"
+    background: "rgba(249, 115, 22, 0.12)"
+    border: "1px solid rgba(245, 87, 108, 0.4)"
     textColor: "#ea580c"
+  map-marker-active:
+    background: "#667eea"
+    textColor: "#ffffff"
+    shadow: "0 4px 12px rgba(102,126,234,0.5)"
+    scale-hover: 1.15
+  map-marker-hotel:
+    background: "hsl(222 47% 11%)"
+    textColor: "#ffffff"
+    size: "larger"
+    icon: "Star"
 ---
 
-# Design System: TripPlanner
+# DESIGN.md — TripPlanner
 
-## 1. Overview
-
-**Creative North Star: "The Warm Horizon"**
-
-TripPlanner feels like the moment before a trip begins: the excitement of planning, the clarity of knowing exactly where you're going, and the warmth of doing it with people you care about. The interface doesn't feel like software — it feels like opening a map on a sunlit morning. Every screen rewards curiosity and keeps momentum.
-
-**Character:** Friendly, organized, quietly premium. Not corporate, not chaotic. Warm without being saccharine. The aesthetic earns trust through clarity and rewards attention with delightful moments.
-
-**Key Characteristics:**
-- Tonal surface layering (no heavy shadows); depth comes from lightness steps
-- Aurora gradient as accent voice, not background noise
-- Generous radius (12–16px) for approachable, tactile components
-- Motion is responsive and purposeful — enters/exits feel natural, not theatrical
-- Layout breathes with variable spacing; never uniform padding everywhere
-- Cards used only when content is distinct, actionable, and worth comparison
+> Design system reference untuk AI coding agents. Drop file ini ke root project dan instruksikan agent untuk mengikutinya saat build UI. **Baca seluruh file ini sebelum menulis satu baris kode pun.**
 
 ---
 
-## 2. Colors: The Twilight Sail Palette
+## 1. Creative Direction — "The Warm Horizon"
 
-The Aurora palette evokes a twilight sky — purple deepening into pink at the horizon. It's warm, not cold; optimistic, not aggressive. Used as an accent voice (≤15% of any screen), never as a default surface.
+TripPlanner terasa seperti momen sebelum perjalanan dimulai: excitement saat planning, kejelasan mengetahui tujuan, dan kehangatan melakukannya bersama orang yang kamu sayangi. Interface ini tidak terasa seperti software — terasa seperti membuka peta di pagi yang cerah.
 
-### Primary — Twilight Sail
-**Aurora Purple** (`#667eea`): Primary buttons, active nav states, key CTAs, logo marks. Carries brand recognition.
-**Aurora Mid** (`#764ba2`): Gradient midpoint. Adds depth to gradient transitions.
-**Aurora Pink** (`#f093fb`): Gradient terminus. Used sparingly on hover states and decorative elements.
+**Character:** Friendly, organized, quietly premium. Tidak corporate, tidak chaotic. Hangat tanpa terasa manis berlebihan. Estetika yang membangun kepercayaan lewat kejelasan dan memberikan momen menyenangkan saat diperhatikan.
+
+**Design Philosophy:**
+- **Map-centric** — peta bukan fitur tambahan, dia adalah canvas utama. UI memeluk peta, bukan mengganggunya.
+- **Collaborative feel** — avatar, warna per-user, real-time indicators. Terasa seperti kerja bareng, bukan solo.
+- **Clarity first** — layout bisa dibaca sekilas. Traveler sedang planning trip, bukan membaca essay.
+- **Tonal depth** — kedalaman visual dari perbedaan lightness surface, bukan shadow yang berat.
+
+**Density:** Medium. Card-based layout. Sidebar dan panel bisa padat tapi harus breathable. Variasikan spacing untuk ritme visual — jangan uniform padding di mana-mana.
+
+---
+
+## 2. Colors — The Twilight Sail Palette
+
+Aurora palette membangkitkan langit senja — ungu yang makin dalam ke pink di cakrawala. Hangat, bukan dingin; optimistis, bukan agresif.
+
+### Primary — Aurora
+| Token | Value | Penggunaan |
+|-------|-------|------------|
+| `aurora-start` | `#667eea` | Primary buttons, active nav, logo mark, key CTAs |
+| `aurora-mid` | `#764ba2` | Gradient midpoint, depth pada transisi |
+| `aurora-end` | `#f093fb` | Gradient terminus, hover accent |
+| `aurora-gradient` | `linear-gradient(135deg, #667eea, #764ba2, #f093fb)` | Hanya CTA utama & brand accent |
 
 ### Secondary — Warm Action
-**Sunset Orange** (`#f97316`): Secondary accents, call-to-action highlights. Not used as frequently as primary — when it appears, it means "do this now."
-**Coral** (`#f5576c`): Destructive states, error treatments, urgency indicators.
+| Token | Value | Penggunaan |
+|-------|-------|------------|
+| `sunset-warm` | `#f97316` | Secondary accent, "do this now" CTA |
+| `sunset-pink` | `#fda085` | Gradient pair sunset, dekoratif |
+| `coral-accent` | `#f5576c` | Destructive, error, urgency |
 
 ### Tertiary — Functional
-**Ocean Blue** (`#0ea5e9`): Info states, links, water/destination-related imagery tinting.
-**Ocean Deep** (`#1e40af`): Darker ocean variant for strong contrast text on light.
+| Token | Value | Penggunaan |
+|-------|-------|------------|
+| `ocean-light` | `#0ea5e9` | Info, links |
+| `ocean-deep` | `#1e40af` | Strong contrast text |
+| `success` | `#10b981` | Success state |
+| `warning` | `#f59e0b` | Warning, caution |
 
 ### Neutral — Tonal Surface Stack
-The system uses tonal layering, not shadows for depth. Every surface is a lightness step from a warm near-white base.
+Sistem menggunakan **tonal layering**, bukan shadow, sebagai sinyal depth utama.
 
-- **Surface Base** (`hsl(0 0% 98%)`): Page background. Near-white with zero chroma.
-- **Surface Card** (`hsl(0 0% 100%)`): Card and panel surfaces. Pure white, one step above base.
-- **Border** (`hsl(214 32% 88%)`): Dividers, input strokes, card outlines. Cool-tinted gray.
-- **Text Primary** (`hsl(222 47% 11%)`): Near-black for headings and primary copy.
-- **Text Muted** (`hsl(215 16% 35%)`): Secondary text, labels, descriptions.
+| Token | Value | Penggunaan |
+|-------|-------|------------|
+| `surface-base` | `hsl(0 0% 98%)` | Page background — near-white |
+| `surface-card` | `hsl(0 0% 100%)` | Card & panel — pure white |
+| `border` | `hsl(214 32% 88%)` | Divider, input stroke, card outline |
+| `text-primary` | `hsl(222 47% 11%)` | Heading dan primary copy |
+| `text-muted` | `hsl(215 16% 35%)` | Secondary text, label, description |
+
+### Map Route Colors — Per Hari
+Warna ini digunakan **secara konsisten di tiga tempat sekaligus**: marker peta, polyline rute, dan day chip di sidebar. Jangan pakai warna berbeda untuk hari yang sama di context berbeda.
+
+| Token | Value | Hari |
+|-------|-------|------|
+| `map-day-1` | `#f97316` | Hari 1 |
+| `map-day-2` | `#0ea5e9` | Hari 2 |
+| `map-day-3` | `#10b981` | Hari 3 |
+| `map-day-4` | `#8b5cf6` | Hari 4 |
+| `map-day-5` | `#f59e0b` | Hari 5 |
+| `map-day-6` | `#ec4899` | Hari 6 |
+| `map-day-7` | `#14b8a6` | Hari 7 |
+
+Untuk trip >7 hari: loop ulang dari `map-day-1` dengan opacity lebih rendah.
 
 ### Named Rules
-**The Accent Scarcity Rule.** The Aurora gradient appears on ≤15% of any screen. Its power comes from restraint. A gradient that appears everywhere is wallpaper — it stops meaning anything.
+**The Accent Scarcity Rule.** Aurora gradient muncul di ≤15% layar mana pun. Satu penggunaan gradient yang tegas lebih baik dari tiga yang ragu-ragu. Gradient yang ada di mana-mana jadi wallpaper dan berhenti punya makna.
 
 ---
 
 ## 3. Typography
 
-**Display / Heading Font:** Satoshi (700 weight) — geometric sans with personality. Used for headings, hero text, navigation labels. Commits to one strong family rather than mixing.
+**Font setup** di `app/layout.tsx`:
+```css
+@import url('https://api.fontshare.com/v2/css?f[]=satoshi@700,600,500,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+```
 
-**Body Font:** Inter (400–500 weight) — clean, legible, humanist. Used for body copy, labels, descriptions. Pairs with Satoshi as a functional hierarchy.
+| Role | Font | Weight | Size | Line Height | Penggunaan |
+|------|------|--------|------|-------------|------------|
+| Display | Satoshi | 700 | `clamp(2rem, 5vw, 3.5rem)` | 1.1 | Hero headline, page title, marketing CTA |
+| Heading | Satoshi | 600 | `1.5–1.75rem` | 1.2 | Section heading, card title, nav active |
+| Title | Satoshi | 600 | `1.125–1.25rem` | 1.3 | List item title, dialog heading |
+| Body | Inter | 400 | `0.9375rem` | 1.6 | Paragraph, description. Max `70ch`. |
+| Label | Inter | 500 | `0.75–0.8125rem` | 1.4 | Badge, tag, metadata, helper text |
 
-**Character:** Functional warmth. Satoshi brings personality to headlines; Inter keeps body copy comfortable at length. Not cold monospace, not overly decorative serif.
-
-### Hierarchy
-- **Display** (Satoshi 700, clamp(2rem, 5vw, 3.5rem), 1.1 line-height): Hero headlines, page titles, marketing CTA text.
-- **Headline** (Satoshi 600, 1.5–1.75rem, 1.2 line-height): Section headings, card titles, nav active states.
-- **Title** (Satoshi 600, 1.125–1.25rem, 1.3 line-height): List item titles, dialog headings, table headers.
-- **Body** (Inter 400, 0.9375rem, 1.6 line-height): Paragraph text, descriptions, form labels. Max line length 70ch.
-- **Label** (Inter 500, 0.75–0.8125rem, tracking 0.01em): Badges, tags, metadata, helper text. Uppercase only when semantically required (never for decoration).
-
----
-
-## 4. Elevation
-
-TripPlanner uses **tonal surface layering**, not shadows, as the primary depth cue. Cards and panels are at different lightness steps — the lighter the surface, the higher the elevation.
-
-- **Base surface:** Page background, `hsl(0 0% 98%)`
-- **Card surface:** White cards, `hsl(0 0% 100%)`, one step above base
-- **Elevated surface:** Dropdowns, dialogs, tooltips. Use `backdrop-filter: blur(16px)` with a subtle white tint.
-
-**Shadows exist but are minimal** — used only for hover states and interactive feedback. Structural depth comes from tonal contrast.
-
-### Shadow Vocabulary
-- **`card`** (`0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.1)`): Card at rest. Barely visible — the card's white surface is the elevation signal.
-- **`card-md`** (`0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06)`): Card on hover. Adds presence without drama.
-- **`card-lg`** (`0 10px 15px rgba(0,0,0,0.1), 0 4px 6px rgba(0,0,0,0.05)`): Modals, dialogs. The heaviest shadow in the system.
-- **`glass`** (`0 8px 32px rgba(31, 38, 135, 0.15)`): Glass-morphism elements, used sparingly. Never as decorative default.
-- **`glow-aurora`** (`0 0 40px rgba(102, 126, 234, 0.4)`): Focused accent elements. Used sparingly for emphasis.
-
-### Named Rules
-**The Flat-By-Default Rule.** Surfaces are flat at rest. Shadows appear only as a response to state (hover, focus, elevation). If a shadow appears on an element that isn't being interacted with, it's unnecessary.
+**Aturan:**
+- Jangan gunakan uppercase untuk dekorasi — hanya saat semantically required.
+- Jangan gunakan gradient text pada heading.
+- Jangan gunakan pure black (`#000000`) — gunakan `hsl(222 47% 11%)`.
 
 ---
 
-## 5. Components
+## 4. Elevation & Shadows
+
+TripPlanner menggunakan **tonal surface layering** sebagai sinyal depth utama.
+
+| Level | Surface | Penggunaan |
+|-------|---------|------------|
+| 0 — Base | `hsl(0 0% 98%)` | Page background |
+| 1 — Card | `hsl(0 0% 100%)` | Cards, panels |
+| 2 — Elevated | White + blur | Dropdown, tooltip, popover |
+| 3 — Overlay | White + dark backdrop | Dialog, modal, drawer |
+
+**Shadow tokens** — hanya muncul sebagai respons state (hover, focus), bukan pada elemen diam:
+```css
+--shadow-card:    0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.1);
+--shadow-card-md: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06);
+--shadow-card-lg: 0 10px 15px rgba(0,0,0,0.1), 0 4px 6px rgba(0,0,0,0.05);
+--shadow-glass:   0 8px 32px rgba(31, 38, 135, 0.15);  /* sangat hemat */
+--shadow-glow:    0 0 40px rgba(102, 126, 234, 0.4);   /* sangat hemat */
+--shadow-map:     0 2px 20px rgba(0,0,0,0.18);         /* panel di atas peta */
+```
+
+**The Flat-By-Default Rule.** Surface datar saat diam. Shadow muncul hanya sebagai respons state. Kalau elemen tidak diinteraksi, tidak perlu shadow.
+
+---
+
+## 5. Border Radius
+
+```css
+--radius-sm:   6px     /* Badge, chip kecil */
+--radius-md:   8px     /* Input, button kecil */
+--radius-lg:   12px    /* Card, panel */
+--radius-xl:   16px    /* Modal, large card, button primary */
+--radius-2xl:  20px    /* Bottom sheet, drawer */
+--radius-full: 9999px  /* Pill, avatar, tag */
+```
+
+---
+
+## 6. Spacing
+
+```css
+--space-1: 4px  | --space-2: 8px   | --space-3: 12px  | --space-4: 16px
+--space-5: 20px | --space-6: 24px  | --space-8: 32px  | --space-10: 40px
+--space-12: 48px | --space-16: 64px
+```
+
+**Grid layout Trip Editor:**
+```css
+grid-template-columns: 380px 1fr; /* sidebar + peta */
+/* sidebar: fixed 380px, overflow-y: scroll, height: calc(100vh - 64px) */
+/* peta: flex: 1, full height */
+/* mobile: stack vertikal, peta 50vh, itinerary 50vh */
+```
+
+---
+
+## 7. Components
 
 ### Buttons
-- **Shape:** Rounded-xl (16px radius). Friendly, approachable — never sharp.
-- **Primary:** Aurora gradient background, white text, medium shadow. Padding 12px 24px.
-- **Hover:** Slight scale (1.02), shadow lifts. Transition 300ms ease-out.
-- **Secondary:** Light surface (`hsl(210 40% 96%)`), dark text. Ghost when resting, gains background on hover.
-- **Ghost:** Transparent background, muted text. Hover: soft gray background appears.
-- **Destructive:** Coral-red background for irreversible actions.
+```
+Primary:     bg = aurora-gradient | text = white | radius = 16px | padding = 12px 24px
+             hover: scale(1.02), shadow = 0 8px 24px rgba(102,126,234,0.3)
+Secondary:   bg = hsl(210 40% 96%) | text = text-primary | radius = 16px
+Ghost:       bg = transparent | text = text-muted | hover bg = hsl(210 40% 94%)
+Destructive: bg = #f5576c | text = white
+Sizes:       sm h=32px | md h=40px | lg h=48px
+```
 
 ### Cards
-- **Corner style:** Rounded-xl (16px radius). Generous but not bubbly.
-- **Background:** White (`hsl(0 0% 100%)`). The surface itself is the depth signal.
-- **Border:** 1px solid `hsl(214 32% 88%)`. Visible but not loud.
-- **Hover:** Border shifts to `rgba(102, 126, 234, 0.3)`, shadow lifts to card-md, 2px upward translate.
-- **Internal padding:** 16–24px. Spacious enough to feel breathable.
+```
+bg        = hsl(0 0% 100%)
+border    = 1px solid hsl(214 32% 88%)
+radius    = 16px
+padding   = 16–24px
+shadow    = --shadow-card (at rest)
+hover:    border-color → rgba(102,126,234,0.3) | shadow → --shadow-card-md | translateY(-2px)
+transition: 200ms ease-out
+```
 
-### Chips / Badges
-- **Style:** Pill-shaped (rounded-full). Background tinted with aurora/sunset/ocean at low opacity, border at matching saturation.
-- **Selected state:** Solid tint background, darker text. Clear visual toggle.
-- **Text:** Small, semibold. Not uppercase unless functional.
+### Inputs & Forms
+```
+bg          = white
+border      = 1px solid hsl(214 32% 88%)
+radius      = 16px
+height      = 44px
+padding     = 12px 16px
+focus ring  = 0 0 0 3px rgba(102,126,234,0.2)
+error       = border #f5576c + background tint merah sangat muda
+placeholder = text-muted
+```
 
-### Inputs
-- **Style:** 1px border (`hsl(214 32% 88%)`), white background, rounded-xl.
-- **Focus:** Ring in aurora at 40% opacity — visible but not aggressive. No color change on border.
-- **Error:** Border shifts to destructive color with subtle destructive background tint.
-- **Placeholder:** `text-muted-foreground` (`hsl(215 16% 35%)`). Never light gray on white.
+### Badges / Chips
+```
+aurora:  bg rgba(102,126,234,0.12) | border rgba(102,126,234,0.4) | text #4f46e5
+sunset:  bg rgba(249,115,22,0.12)  | border rgba(245,87,108,0.4)  | text #ea580c
+success: bg rgba(16,185,129,0.12)  | border rgba(16,185,129,0.4)  | text #059669
+warning: bg rgba(245,158,11,0.12)  | border rgba(245,158,11,0.4)  | text #d97706
+error:   bg rgba(245,87,108,0.12)  | border rgba(245,87,108,0.4)  | text #dc2626
+radius   = --radius-full | padding = 2px 10px | font = Inter 500, 0.75rem
+```
+
+### Avatars
+```
+shape    = circular (radius-full)
+sizes    = sm:24px | md:32px | lg:40px | xl:48px
+stacked  = margin-left: -8px, border: 2px solid white
+fallback = initials, background dari hash nama menggunakan warna map-day-*
+```
 
 ### Navigation
-- **Style:** Fixed top bar. Glass-card background with subtle blur when content scrolls behind.
-- **Active state:** Aurora gradient pill with white text. Commanding presence.
-- **Inactive state:** Transparent with muted text. Subtle hover background.
-- **Mobile:** Horizontal scrollable pill row below the top bar. Same active treatment.
+```
+style      = fixed top bar, 64px height
+background = glass saat konten scroll di belakang (backdrop-filter: blur(12px))
+active     = aurora gradient pill, white text
+inactive   = transparent, text-muted, hover bg muncul
+mobile     = horizontal scrollable pill row di bawah top bar
+```
 
-### Dialogs
-- **Backdrop:** Semi-transparent dark overlay with blur.
-- **Panel:** White surface, rounded-2xl, card-lg shadow. Generous padding (24–32px).
-- **Close button:** Top-right, ghost style.
+### Map Markers (Custom SVG — jangan pakai default Google pin)
+```
+shape    = teardrop custom SVG
+active   = bg #667eea | text white | shadow glow aurora
+inactive = bg white | border 2px solid warna hari | text warna hari
+hotel    = icon Star | bg hsl(222 47% 11%) | text white | ukuran lebih besar
+hover    = scale(1.15), transition 100ms
+number   = nomor urut kunjungan di dalam marker
+```
 
 ---
 
-## 6. Do's and Don'ts
+## 8. Component Library — shadcn/ui
 
-### Do:
-- **Do** use the Aurora gradient as an accent voice, not decoration. One decisive gradient use beats three timid ones.
-- **Do** use tonal surface differences to communicate depth. White card on near-white background is enough.
-- **Do** use generous radius (12–16px) consistently. It communicates warmth and approachability.
-- **Do** use motion for feedback and orientation. Hover transitions, stagger entrances, smooth page changes.
-- **Do** design for the squint test: primary action and secondary grouping should be obvious when blurred.
-- **Do** use real imagery for destinations and trips. A photo of an actual place beats a gradient placeholder.
+Gunakan **shadcn/ui** sebagai base component library.
 
-### Don't:
-- **Don't** use purple/aurora gradient as a background wash across entire sections. The gradient is an accent, not a canvas.
-- **Don't** use glassmorphism decoratively. Frosted glass cards used because they look "modern" are banned.
-- **Don't** use dark glass-morphism themes. TripPlanner is light and bright; depth comes from tonal layering.
-- **Don't** use identical card grids (icon + heading + text, repeated). Cards should have distinct content, not identical structure.
-- **Don't** use gradient text for headings. Use solid color emphasis via weight and scale, not `background-clip: text`.
-- **Don't** use side-stripe borders (colored border-left > 1px as accent on cards or alerts). Use full borders, background tints, or leading icons.
-- **Don't** use heavy shadows on resting elements. Resting cards should be nearly flat; only hovered/elevated elements gain shadow.
-- **Don't** use pure black or pure white as text colors. Use `hsl(222 47% 11%)` for primary text, `hsl(0 0% 100%)` for inverted text only.
-- **Don't** repeat the same section structure across a page. Vary layout rhythm; same padding everywhere is monotony.
+```bash
+npx shadcn@latest init
+# Pilih base color: neutral | CSS variables: yes
+```
+
+**Override CSS variables** di `app/globals.css`:
+```css
+@layer base {
+  :root {
+    --background:          0 0% 98%;
+    --foreground:          222 47% 11%;
+    --card:                0 0% 100%;
+    --card-foreground:     222 47% 11%;
+    --primary:             248 84% 70%;
+    --primary-foreground:  0 0% 100%;
+    --secondary:           210 40% 96%;
+    --secondary-foreground:222 47% 11%;
+    --muted:               210 40% 96%;
+    --muted-foreground:    215 16% 35%;
+    --border:              214 32% 88%;
+    --input:               214 32% 88%;
+    --ring:                248 84% 70%;
+    --radius:              0.75rem;
+  }
+  .dark {
+    --background:          240 25% 8%;
+    --foreground:          0 0% 98%;
+    --card:                240 25% 11%;
+    --card-foreground:     0 0% 98%;
+    --border:              240 10% 18%;
+    --input:               240 10% 18%;
+    --muted:               240 10% 18%;
+    --muted-foreground:    215 16% 65%;
+  }
+}
+```
+
+**Install semua komponen (jalankan sekaligus):**
+```bash
+npx shadcn@latest add button card input label badge avatar \
+  dialog drawer dropdown-menu tabs tooltip toast skeleton \
+  separator scroll-area calendar popover command sheet \
+  progress slider switch textarea table accordion \
+  alert-dialog select radio-group checkbox
+```
+
+---
+
+## 9. Charting — Recharts
+
+Gunakan **Recharts** untuk semua visualisasi data.
+
+```bash
+npm install recharts
+```
+
+| Halaman | Chart | Komponen Recharts |
+|---------|-------|-------------------|
+| Budget | Breakdown per kategori | `PieChart` + `Cell` + custom `Tooltip` |
+| Budget | Biaya per hari | `BarChart` horizontal |
+| Admin | Pertumbuhan user | `LineChart` + `Area` |
+| Admin | Trip per minggu | `BarChart` |
+| Guide Profile | Rating breakdown | `BarChart` horizontal |
+
+**Styling wajib — selalu override default Recharts:**
+```tsx
+// Custom Tooltip — jangan pakai default
+const CustomTooltip = ({ active, payload }) => {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-[hsl(222_47%_11%)] text-white rounded-xl px-3 py-2 text-sm shadow-lg">
+      {payload[0].name}: <strong>{payload[0].value}</strong>
+    </div>
+  )
+}
+
+// Warna: gunakan map-day-* colors untuk konsistensi
+const CHART_COLORS = ['#f97316', '#0ea5e9', '#10b981', '#8b5cf6', '#f59e0b']
+
+// Grid styling
+<CartesianGrid strokeDasharray="3 3" stroke="hsl(214 32% 88%)" opacity={0.5} />
+
+// Axis styling
+<XAxis tick={{ fontFamily: 'Inter', fontSize: 12, fill: 'hsl(215 16% 35%)' }} />
+<YAxis tick={{ fontFamily: 'Inter', fontSize: 12, fill: 'hsl(215 16% 35%)' }} />
+```
+
+---
+
+## 10. Icons — Lucide React
+
+Sudah bundled dengan shadcn. Gunakan sebagai satu-satunya icon library.
+
+**Default size: 18px.** Stick ke 14 / 18 / 24 / 32px — jangan pakai ukuran random.
+
+```
+Map & Navigation:  MapPin, Map, Navigation, Compass, Route, Globe
+Trip & Travel:     Plane, CalendarDays, Clock, Users, Luggage, Ticket
+Places:            Hotel, Coffee, Camera, TreePine, UtensilsCrossed, Building
+Actions:           Plus, Edit2, Trash2, Share2, Download, Copy, ExternalLink
+Status:            CheckCircle2, AlertTriangle, Info, XCircle, Loader2
+UI:                ChevronRight, ChevronDown, Menu, X, Search, Filter, SlidersHorizontal
+Collaboration:     UserPlus, MessageSquare, Bell, Eye, Lock
+Weather:           Sun, Cloud, CloudRain, CloudSnow, Wind, Thermometer
+Money:             Wallet, Receipt, SplitSquareHorizontal, CreditCard
+AI:                Sparkles, Wand2, Bot, BrainCircuit
+```
+
+---
+
+## 11. Animation & Motion
+
+```bash
+npm install framer-motion
+```
+
+**Prinsip:** Motion untuk feedback dan orientasi — bukan dekorasi. Enter/exit terasa natural. Pilih 1–2 momen animasi bermakna per halaman, jangan stack berlebihan.
+
+**Timing standar:**
+```ts
+const micro      = { duration: 0.15, ease: 'easeOut' }           // hover, focus
+const transition = { duration: 0.25, ease: [0.16, 1, 0.3, 1] }  // panel, drawer
+const page       = { duration: 0.35, ease: [0.16, 1, 0.3, 1] }  // page change
+const stagger    = { staggerChildren: 0.06 }                      // list items
+```
+
+**Animasi wajib:**
+```ts
+// Page enter
+{ initial: { opacity: 0, y: 12 }, animate: { opacity: 1, y: 0 } }
+
+// Card list stagger
+{ initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 } }
+
+// Sidebar slide-in dari kiri
+{ initial: { x: -380 }, animate: { x: 0 } }
+
+// AI panel slide-in dari kanan
+{ initial: { x: 400 }, animate: { x: 0 } }
+
+// Map marker muncul
+{ initial: { scale: 0, opacity: 0 }, animate: { scale: 1, opacity: 1 },
+  transition: { type: 'spring', stiffness: 400, damping: 20 } }
+
+// Toast / notif
+{ initial: { x: 60, opacity: 0 }, animate: { x: 0, opacity: 1 } }
+```
+
+**CSS-only** untuk hover dan focus (tidak perlu framer motion):
+```css
+transition: box-shadow 150ms ease, transform 150ms ease, border-color 150ms ease;
+```
+
+---
+
+## 12. Map System — @vis.gl/react-google-maps
+
+```bash
+npm install @vis.gl/react-google-maps
+```
+
+**Setup di `app/layout.tsx`:**
+```tsx
+import { APIProvider } from '@vis.gl/react-google-maps'
+<APIProvider apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY}>
+  {children}
+</APIProvider>
+```
+
+**Komponen yang dipakai:**
+```
+<Map>             — canvas utama, nonaktifkan default UI chrome Google
+<AdvancedMarker>  — untuk custom marker SVG
+<InfoWindow>      — popup hover destinasi
+<Polyline>        — rute per hari, warna sesuai map-day-*
+```
+
+**Polyline per hari:**
+```tsx
+const dayColors = ['#f97316', '#0ea5e9', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#14b8a6']
+
+<Polyline
+  path={dayCoordinates}
+  strokeColor={dayColors[dayIndex % 7]}
+  strokeWeight={3}
+  strokeOpacity={0.85}
+/>
+```
+
+**Z-index floating UI di atas peta:**
+```
+z-10 — Day legend pills (kiri atas)
+z-10 — Map controls (kanan atas)
+z-10 — Route summary (kanan bawah)
+z-20 — InfoWindow popup
+z-30 — AI Generate FAB button (kiri bawah)
+```
+
+**Map style:** Gunakan custom JSON style untuk kurangi visual noise. Recommended: Snazzy Maps "Light Monochrome" atau buat via Google Cloud Console. Dark mode: terapkan style "night".
+
+---
+
+## 13. Layout Utama — Trip Editor
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  NAVBAR 64px (fixed)                                        │
+│  ← Dashboard | Trip Name (editable) | Avatars | Share | ⋮  │
+├─────────────────────┬───────────────────────────────────────┤
+│  SIDEBAR 380px      │  MAP CANVAS (flex: 1)                 │
+│  (overflow-y scroll)│                                       │
+│  ┌───────────────┐  │  [Google Maps — full height]          │
+│  │ 🏨 Hotel base │  │                                       │
+│  │ Day tabs ●●●  │  │  z-10: Legend    z-10: Controls       │
+│  │ ─────────────│  │                                       │
+│  │ ⚠️ Konflik    │  │  Custom teardrop markers              │
+│  │ ─────────────│  │  Colored polyline routes              │
+│  │ 1. Destinasi │  │                                       │
+│  │ 2. Destinasi │  │  z-20: InfoWindow on hover            │
+│  │ + Add Place  │  │                                       │
+│  └───────────────┘  │  z-30: ✨ AI FAB (kiri bawah)        │
+│  ✨ Generate AI     │                                       │
+│  💰 Split Bill      │                                       │
+└─────────────────────┴───────────────────────────────────────┘
+```
+
+---
+
+## 14. Page Routes
+
+| Route | Halaman | Layout |
+|-------|---------|--------|
+| `/` | Landing Page | Full-width, no sidebar |
+| `/dashboard` | Dashboard | Centered, max-width 1280px |
+| `/trip/[id]` | Trip Editor | Sidebar 380px + Map full height |
+| `/trip/[id]/budget` | Budget & Split Bill | 2 kolom: form + summary |
+| `/marketplace` | Marketplace | Sidebar filter 240px + grid |
+| `/guide/[id]` | Guide Profile | Hero + 2 kolom |
+| `/explore` | Explore | Full-width masonry |
+| `/profile` | User Profile | Centered, max-width 900px |
+| `/admin` | Admin Dashboard | Sidebar 240px + konten |
+
+---
+
+## 15. Responsive Breakpoints
+
+```
+mobile:  < 640px    — single column, map 50vh, itinerary scroll bawah
+tablet:  640–1024px — sidebar collapsible (shadcn Drawer)
+desktop: > 1024px   — full split layout sidebar + map
+wide:    > 1440px   — sidebar bisa 420px
+```
+
+Mobile-first. Tailwind: `sm:` `md:` `lg:` `xl:` `2xl:`.
+
+---
+
+## 16. Dark Mode
+
+```bash
+npm install next-themes
+```
+
+```tsx
+// app/layout.tsx
+import { ThemeProvider } from 'next-themes'
+<ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+  {children}
+</ThemeProvider>
+```
+
+| Token | Light | Dark |
+|-------|-------|------|
+| surface-base | `hsl(0 0% 98%)` | `#0f0f1a` |
+| surface-card | `hsl(0 0% 100%)` | `#1a1a2e` |
+| surface-overlay | — | `#1e1e32` |
+| text-primary | `hsl(222 47% 11%)` | `#f9fafb` |
+| text-muted | `hsl(215 16% 35%)` | `#9ca3af` |
+| border | `hsl(214 32% 88%)` | `rgba(255,255,255,0.08)` |
+
+Aurora gradient **tidak berubah** di dark mode — tetap sama, justru lebih pop di background gelap.
+
+Map dark mode: terapkan Google Maps JSON style "night".
+
+---
+
+## 17. Loading States
+
+Setiap async operation harus punya loading state. Shape skeleton harus menyerupai konten asli (content-shaped), bukan bar horizontal generic.
+
+```
+Data fetching:     shadcn <Skeleton /> berbentuk sesuai konten (card, list, dll)
+Map loading:       spinner di tengah peta dengan overlay transparan ringan
+AI thinking:       animated 3 dots + teks "TripAI sedang merancang itinerary..."
+Route calculating: progress bar 2px di atas sidebar, warna aurora gradient
+Button loading:    disabled state + Loader2 icon dari lucide + animate-spin
+Image loading:     next/image dengan blurDataURL (blur → sharp)
+```
+
+**Skeleton rules:**
+- Trip card skeleton: harus punya cover image placeholder, nama, dan meta — bukan 3 bar horizontal.
+- Gunakan `animate-pulse` Tailwind untuk shimmer.
+- Kalau loading >3 detik, tampilkan error state dengan tombol retry.
+
+---
+
+## 18. Empty States
+
+Empty state harus informatif, sedikit menyenangkan, dan selalu punya CTA yang jelas.
+
+```
+Dashboard — belum ada trip:
+  SVG: peta sederhana dengan titik-titik tanda tanya
+  Heading: "Belum ada trip"
+  Sub: "Mulai rencanakan petualanganmu bersama teman."
+  CTA: "+ Buat Trip Pertama" (primary button)
+
+Trip Editor — hari kosong:
+  SVG: titik-titik marker melayang
+  Heading: "Hari ini masih kosong"
+  Sub: "Cari destinasi atau biarkan AI yang merancang hari ini."
+  CTA: "Cari Destinasi" (secondary) + "✨ Generate dengan AI" (primary)
+
+Marketplace — belum ada template:
+  SVG: guide berdiri dengan peta
+  Heading: "Belum ada template di kota ini"
+  Sub: "Jadilah guide pertama yang berbagi itinerary di sini."
+  CTA: "Daftar sebagai Guide"
+
+No search results:
+  SVG: kaca pembesar
+  Heading: "Tidak ditemukan"
+  Sub: "Coba kata kunci lain atau browse berdasarkan kategori."
+  CTA: chips kategori populer
+
+Notif kosong (konteks kecil — tanpa ilustrasi):
+  Teks saja: "Semua beres — tidak ada notifikasi baru."
+```
+
+---
+
+## 19. Do's and Don'ts
+
+### ✅ Do:
+- **Do** gunakan Aurora gradient sebagai accent voice — satu penggunaan tegas > tiga yang ragu-ragu.
+- **Do** gunakan tonal surface difference untuk depth. White card di atas near-white background sudah cukup.
+- **Do** gunakan radius generous dan konsisten (12–16px) di seluruh card dan modal.
+- **Do** gunakan motion untuk feedback dan orientasi — hover, stagger entrance, smooth page change.
+- **Do** gunakan warna `map-day-*` secara konsisten: sama di marker, polyline, dan sidebar chip untuk hari yang sama.
+- **Do** desain untuk squint test: primary action dan grouping harus obvious saat di-blur.
+- **Do** gunakan real imagery untuk destinasi. Foto nyata lebih baik dari gradient placeholder.
+- **Do** buat skeleton berbentuk sesuai konten, bukan bar horizontal generik.
+
+### ❌ Don't:
+- **Don't** gunakan Aurora gradient sebagai background wash section penuh. Gradient adalah accent, bukan canvas.
+- **Don't** gunakan glassmorphism dekoratif. Frosted glass card karena terlihat "modern" dilarang.
+- **Don't** gunakan dark glassmorphism theme — TripPlanner light dan bright; depth dari tonal layering.
+- **Don't** gunakan gradient text untuk heading — gunakan solid color dengan weight dan scale sebagai emphasis.
+- **Don't** gunakan side-stripe borders (border-left tebal berwarna sebagai accent pada card/alert).
+- **Don't** taruh shadow berat pada elemen diam. Resting card hampir flat.
+- **Don't** gunakan pure black `#000000` sebagai text — gunakan `hsl(222 47% 11%)`.
+- **Don't** ulangi struktur section identik di satu halaman. Variasikan ritme layout.
+- **Don't** pakai warna berbeda untuk hari yang sama di context berbeda (marker vs sidebar vs legend).
+- **Don't** stack animasi berlebihan — 1–2 momen animasi bermakna per halaman sudah cukup.
+
+---
+
+> **Catatan untuk AI Agent**: Baca seluruh file ini sebelum generate satu baris kode pun. Ikuti semua token, aturan, dan constraint. Kalau ragu antara dua pilihan desain, pilih yang lebih sederhana dan lebih konsisten dengan design system ini. Konsistensi lebih penting dari kreativitas lokal per komponen.

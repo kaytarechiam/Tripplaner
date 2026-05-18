@@ -1,7 +1,7 @@
 import { motion } from "framer-motion"
 import {
-  ArrowLeft, MapPin, Calendar, Users, Star, Award,
-  Edit3, Settings, Globe, Plane, Map, TrendingUp,
+  MapPin, Calendar, Users, Star, Award,
+  Edit3, Globe, Plane, Map, TrendingUp,
   ChevronRight, ExternalLink, Heart, MessageSquare, Share2,
   Loader2
 } from "lucide-react"
@@ -18,12 +18,12 @@ import type { Trip } from "../lib/supabase"
 type Page = "landing" | "login" | "register" | "home" | "editor" | "ai" | "splitbill" | "explore" | "profile" | "achievements" | "bucketlist" | "settings" | "notifications"
 
 interface ProfileProps {
-  setCurrentPage: (page: Page) => void
+  navigateTo: (page: Page) => void
   onLogout: () => void
   user: any
 }
 
-export function Profile({ setCurrentPage, onLogout, user }: ProfileProps) {
+export function Profile({ navigateTo, onLogout, user }: ProfileProps) {
   const [isOwnProfile] = useState(true)
   const [trips, setTrips] = useState<Trip[]>([])
   const [loading, setLoading] = useState(true)
@@ -73,24 +73,6 @@ export function Profile({ setCurrentPage, onLogout, user }: ProfileProps) {
 
   return (
     <div className="pt-16 min-h-screen">
-      {/* Header */}
-      <div className="sticky top-16 z-40 glass-card border-b border-white/10 px-4 sm:px-6 lg:px-8 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => setCurrentPage("home")}>
-              <ArrowLeft className="w-4 h-4" />
-            </Button>
-            <h1 className="text-xl font-bold">Profil</h1>
-          </div>
-          {isOwnProfile && (
-            <Button variant="outline" size="sm" onClick={() => setCurrentPage("settings")}>
-              <Settings className="w-4 h-4 mr-2" />
-              Edit Profil
-            </Button>
-          )}
-        </div>
-      </div>
-
       {/* Profile Header */}
       <div className="aurora-bg-mesh py-12">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -202,7 +184,7 @@ export function Profile({ setCurrentPage, onLogout, user }: ProfileProps) {
               ) : tripHistory.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <Plane className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                  <p>Belum ada trip. <button className="text-[var(--aurora-start)]" onClick={() => setCurrentPage("editor")}>Buat trip pertamamu!</button></p>
+                  <p>Belum ada trip. <button className="text-[var(--aurora-start)]" onClick={() => navigateTo("editor")}>Buat trip pertamamu!</button></p>
                 </div>
               ) : (
                 tripHistory.map((trip) => (
@@ -220,7 +202,7 @@ export function Profile({ setCurrentPage, onLogout, user }: ProfileProps) {
                       <span className="text-xs text-muted-foreground capitalize">{trip.status}</span>
                     </div>
                   </div>
-                  <Button variant="ghost" size="icon" onClick={() => setCurrentPage("editor")}>
+                  <Button variant="ghost" size="icon" onClick={() => navigateTo("editor")}>
                     <ChevronRight className="w-4 h-4" />
                   </Button>
                 </div>
@@ -265,7 +247,7 @@ export function Profile({ setCurrentPage, onLogout, user }: ProfileProps) {
             <div className="text-center py-12">
               <Heart className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">Trip yang kamu simpan akan muncul di sini</p>
-              <Button variant="gradient" size="sm" className="mt-4" onClick={() => setCurrentPage("explore")}>
+              <Button variant="gradient" size="sm" className="mt-4" onClick={() => navigateTo("explore")}>
                 Jelajahi Trip
               </Button>
             </div>

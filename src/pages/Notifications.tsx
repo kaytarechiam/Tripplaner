@@ -1,7 +1,7 @@
 import { motion } from "framer-motion"
 import {
   Bell, Heart, Users, MessageSquare,
-  MapPin, Calendar, Check, X, Mail, ArrowLeft, Loader2
+  MapPin, Calendar, Check, X, Mail, Loader2
 } from "lucide-react"
 import { Button } from "../components/ui/button"
 import { Badge } from "../components/ui/badge"
@@ -14,7 +14,7 @@ import { getSession } from "../lib/supabase"
 type Page = "landing" | "login" | "register" | "home" | "editor" | "ai" | "splitbill" | "explore" | "profile" | "achievements" | "bucketlist" | "settings" | "notifications"
 
 interface NotificationsProps {
-  setCurrentPage: (page: Page) => void
+  navigateTo: (page: Page) => void
 }
 
 const typeIcons: Record<string, typeof Bell> = {
@@ -49,7 +49,7 @@ interface NotificationItem {
   created_at: string
 }
 
-export function Notifications({ setCurrentPage }: NotificationsProps) {
+export function Notifications({ navigateTo }: NotificationsProps) {
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<"all" | "unread">("all")
@@ -112,30 +112,6 @@ export function Notifications({ setCurrentPage }: NotificationsProps) {
 
   return (
     <div className="pt-16 min-h-screen">
-      {/* Header */}
-      <div className="sticky top-16 z-40 glass-card border-b border-white/10 px-4 sm:px-6 lg:px-8 py-4">
-        <div className="max-w-2xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => setCurrentPage("home")}>
-              <ArrowLeft className="w-4 h-4" />
-            </Button>
-            <h1 className="text-xl font-bold flex items-center gap-2">
-              <Bell className="w-5 h-5 text-amber-500" />
-              Notifikasi
-              {unreadCount > 0 && (
-                <Badge variant="destructive" className="ml-2">{unreadCount}</Badge>
-              )}
-            </h1>
-          </div>
-          {unreadCount > 0 && (
-            <Button variant="ghost" size="sm" onClick={markAllAsRead}>
-              <Check className="w-4 h-4 mr-1" />
-              Tandai semua dibaca
-            </Button>
-          )}
-        </div>
-      </div>
-
       <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Filter */}
         <div className="flex items-center gap-2 mb-6">

@@ -229,6 +229,42 @@ export async function addSplitBill(item: Omit<SplitBillItem, 'id' | 'created_at'
   return data as SplitBillItem
 }
 
+// Update itinerary item
+export async function updateItineraryItem(id: string, updates: Partial<Omit<ItineraryItem, 'id' | 'trip_id' | 'created_at'>>) {
+  if (!supabase) throw new Error('Supabase not configured')
+  const { data, error } = await supabase
+    .from('itinerary_items')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data as ItineraryItem
+}
+
+// Delete itinerary item
+export async function deleteItineraryItem(id: string) {
+  if (!supabase) throw new Error('Supabase not configured')
+  const { error } = await supabase
+    .from('itinerary_items')
+    .delete()
+    .eq('id', id)
+  if (error) throw error
+}
+
+// Update trip
+export async function updateTrip(id: string, updates: Partial<Omit<Trip, 'id' | 'user_id' | 'created_at'>>) {
+  if (!supabase) throw new Error('Supabase not configured')
+  const { data, error } = await supabase
+    .from('trips')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data as Trip
+}
+
 // ─── Realtime Subscription ───────────────────────────────────
 
 export function subscribeToTrips(callback: (trip: Trip) => void) {
