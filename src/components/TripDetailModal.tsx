@@ -167,13 +167,13 @@ export function TripDetailModal({ trip, onClose, onCopied }: TripDetailModalProp
 
             {/* Badges */}
             <div className="absolute top-3 left-3 flex gap-2">
-              <span className="glass-card px-2 py-1 text-xs text-white flex items-center gap-1">
-                <Calendar className="w-3 h-3" />
+              <span className="glass-card px-2 py-1 text-xs text-black flex items-center gap-1">
+                <Calendar className="w-3 h-3 text-black" />
                 {trip.days} hari
               </span>
               {trip.places > 0 && (
-                <span className="glass-card px-2 py-1 text-xs text-white flex items-center gap-1">
-                  <MapPin className="w-3 h-3" />
+                <span className="glass-card px-2 py-1 text-xs text-black flex items-center gap-1">
+                  <MapPin className="w-3 h-3 text-black" />
                   {trip.places} tempat
                 </span>
               )}
