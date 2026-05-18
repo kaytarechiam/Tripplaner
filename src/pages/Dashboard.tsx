@@ -15,10 +15,10 @@ import { getTrips, getBucketList, getSession } from "../lib/supabase"
 import { supabase } from "../lib/supabase"
 import type { Trip, BucketListItem } from "../lib/supabase"
 
-type Page = "landing" | "login" | "register" | "home" | "editor" | "ai" | "splitbill" | "explore" | "profile" | "achievements" | "bucketlist" | "settings" | "notifications"
+type Page = "landing" | "login" | "register" | "home" | "editor" | "ai" | "splitbill" | "explore" | "profile" | "achievements" | "bucketlist" | "settings" | "notifications" | "trips"
 
 interface DashboardProps {
-  setCurrentPage: (page: Page) => void
+  navigateTo: (page: Page) => void
   onLogout: () => void
   user: any
 }
@@ -158,7 +158,7 @@ function formatTimeAgo(dateStr: string): string {
 
 // ─── Main Component ────────────────────────────────────────
 
-export function Dashboard({ setCurrentPage, onLogout, user }: DashboardProps) {
+export function Dashboard({ navigateTo, onLogout, user }: DashboardProps) {
   const [searchQuery] = useState("")
   const { trips, notifications, reminders, bucketList, unreadCount, loading } = useDashboardData()
 
@@ -182,10 +182,7 @@ export function Dashboard({ setCurrentPage, onLogout, user }: DashboardProps) {
   }))
 
   return (
-    <div className="pt-16 min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-16 z-40 bg-white border-b border-border px-4 sm:px-6 lg:px-8 py-4 shadow-sm" />
-
+    <div className="pt-16 min-h-screen">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
         {/* Welcome Section */}
@@ -222,7 +219,7 @@ export function Dashboard({ setCurrentPage, onLogout, user }: DashboardProps) {
                   <Map className="w-5 h-5 text-[var(--aurora-start)]" />
                   Trip {trips.length > 0 ? `(${trips.length})` : "Aktif"}
                 </h2>
-                <Button variant="ghost" size="sm" onClick={() => trips.length > 0 ? setCurrentPage("editor") : setCurrentPage("ai")}>
+                <Button variant="ghost" size="sm" onClick={() => trips.length > 0 ? navigateTo("trips") : navigateTo("ai")}>
                   {trips.length > 0 ? "Lihat Semua" : "Buat Baru"}
                   <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
@@ -241,7 +238,7 @@ export function Dashboard({ setCurrentPage, onLogout, user }: DashboardProps) {
                       animate={{ opacity: 1, scale: 1 }}
                       transition={{ delay: 0.1 + i * 0.1 }}
                       className="bg-white border border-border rounded-2xl p-5 cursor-pointer group hover:border-[var(--aurora-start)]/30 hover:shadow-md transition-all duration-300"
-                      onClick={() => setCurrentPage("editor")}
+                      onClick={() => navigateTo("editor")}
                     >
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center gap-3">
@@ -299,7 +296,7 @@ export function Dashboard({ setCurrentPage, onLogout, user }: DashboardProps) {
                   <p className="text-muted-foreground text-sm mb-6">
                     Mulai rencanakan trip pertamamu dengan bantuan AI!
                   </p>
-                  <Button variant="gradient" onClick={() => setCurrentPage("ai")}>
+                  <Button variant="gradient" onClick={() => navigateTo("ai")}>
                     <Sparkles className="w-4 h-4 mr-2" />
                     Generate dengan AI
                   </Button>
@@ -313,7 +310,7 @@ export function Dashboard({ setCurrentPage, onLogout, user }: DashboardProps) {
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ delay: 0.3 }}
                   className="bg-white border border-border rounded-2xl p-5 flex flex-col items-center justify-center gap-4 cursor-pointer hover:border-[var(--aurora-start)]/30 hover:shadow-md transition-all duration-300 mt-4"
-                  onClick={() => setCurrentPage("editor")}
+                  onClick={() => navigateTo("editor")}
                 >
                   <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[var(--aurora-start)]/20 to-[var(--aurora-end)]/20 flex items-center justify-center">
                     <Plus className="w-6 h-6 text-[var(--aurora-start)]" />
@@ -346,7 +343,7 @@ export function Dashboard({ setCurrentPage, onLogout, user }: DashboardProps) {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2 + i * 0.05 }}
-                    onClick={() => setCurrentPage(action.page)}
+                    onClick={() => navigateTo(action.page)}
                     className="bg-white border border-border rounded-2xl p-4 flex flex-col items-center gap-2 cursor-pointer hover:border-[var(--aurora-start)]/30 hover:shadow-md transition-all duration-300"
                   >
                     <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${action.color} flex items-center justify-center shadow-lg`}>
@@ -370,7 +367,7 @@ export function Dashboard({ setCurrentPage, onLogout, user }: DashboardProps) {
                     <Globe className="w-5 h-5 text-emerald-500" />
                     Trip Kamu
                   </h2>
-                  <Button variant="ghost" size="sm" onClick={() => setCurrentPage("editor")}>
+                  <Button variant="ghost" size="sm" onClick={() => navigateTo("trips")}>
                     Lihat Semua
                     <ChevronRight className="w-4 h-4 ml-1" />
                   </Button>
@@ -384,7 +381,7 @@ export function Dashboard({ setCurrentPage, onLogout, user }: DashboardProps) {
                       animate={{ opacity: 1, scale: 1 }}
                       transition={{ delay: 0.3 + i * 0.1 }}
                       className="bg-white border border-border rounded-2xl p-4 cursor-pointer hover:border-[var(--aurora-start)]/30 hover:shadow-md transition-all duration-300"
-                      onClick={() => setCurrentPage("editor")}
+                      onClick={() => navigateTo("editor")}
                     >
                       <div className={`aspect-video rounded-xl bg-gradient-to-br ${["from-rose-400 via-purple-500 to-indigo-600", "from-emerald-400 via-teal-500 to-blue-500", "from-pink-400 via-rose-500 to-red-500", "from-amber-400 via-orange-500 to-red-600"][i % 4]} relative overflow-hidden mb-3`}>
                         <div className="absolute inset-0 bg-black/10" />
@@ -532,7 +529,7 @@ export function Dashboard({ setCurrentPage, onLogout, user }: DashboardProps) {
                   <MapPin className="w-4 h-4 text-rose-400" />
                   Bucket List
                 </h3>
-                <Button variant="ghost" size="sm" onClick={() => setCurrentPage("bucketlist")}>
+                <Button variant="ghost" size="sm" onClick={() => navigateTo("bucketlist")}>
                   Lihat
                 </Button>
               </div>
@@ -558,7 +555,7 @@ export function Dashboard({ setCurrentPage, onLogout, user }: DashboardProps) {
               ) : (
                 <div className="text-center py-2">
                   <p className="text-sm text-muted-foreground">Bucket list kosong</p>
-                  <Button variant="ghost" size="sm" className="mt-2" onClick={() => setCurrentPage("bucketlist")}>
+                  <Button variant="ghost" size="sm" className="mt-2" onClick={() => navigateTo("bucketlist")}>
                     + Tambah tempat
                   </Button>
                 </div>

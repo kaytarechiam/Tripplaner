@@ -32,6 +32,16 @@ const BUDGET_OPTIONS = [
   { id: "Premium", label: "Premium" },
 ]
 
+const BUDGET_MIN = 100000
+const BUDGET_MAX = 5000000
+
+// Format currency for display
+const formatRupiah = (val: number) => {
+  if (val >= 1000000) return `Rp ${(val / 1000000).toFixed(1)}jt`
+  if (val >= 1000) return `Rp ${(val / 1000).toFixed(0)}rb`
+  return `Rp ${val}`
+}
+
 // Weather icon mapping from WMO codes
 function getWeatherIcon(code: number): string {
   if (code === 0) return "☀️"
@@ -56,10 +66,10 @@ interface PlaceSuggestion {
 }
 
 interface Props {
-  setCurrentPage: (page: "landing" | "login" | "register" | "home" | "editor" | "ai" | "splitbill" | "explore" | "profile" | "achievements" | "bucketlist" | "settings" | "notifications") => void
+  navigateTo: (page: "landing" | "login" | "register" | "home" | "editor" | "ai" | "splitbill" | "explore" | "profile" | "achievements" | "bucketlist" | "settings" | "notifications") => void
 }
 
-export function AIGeneratorPage({ setCurrentPage }: Props) {
+export function AIGeneratorPage({ navigateTo }: Props) {
   const [isGenerating, setIsGenerating] = useState(false)
   const [result, setResult] = useState<any>(null)
   const [recommendations, setRecommendations] = useState<any>(null)
@@ -68,8 +78,11 @@ export function AIGeneratorPage({ setCurrentPage }: Props) {
   const [selectedPlace, setSelectedPlace] = useState<PlaceSuggestion | null>(null)
   const [duration, setDuration] = useState(2)
   const [people, setPeople] = useState(2)
-  const [budget, setBudget] = useState("")
+  // Budget: dual-thumb range
+  const [minBudget, setMinBudget] = useState(BUDGET_MIN)
+  const [maxBudget, setMaxBudget] = useState(BUDGET_MAX)
   const [preferences, setPreferences] = useState<string[]>([])
+  const [customMessage, setCustomMessage] = useState("")
   const [progress, setProgress] = useState(0)
   const [progressLabel, setProgressLabel] = useState("")
   const [error, setError] = useState("")
@@ -121,8 +134,10 @@ export function AIGeneratorPage({ setCurrentPage }: Props) {
     setSelectedPlace(null)
     setDuration(2)
     setPeople(2)
-    setBudget("")
+    setMinBudget(BUDGET_MIN)
+    setMaxBudget(BUDGET_MAX)
     setPreferences([])
+    setCustomMessage("")
     setError("")
     setProgress(0)
     setProgressLabel("")
@@ -154,8 +169,10 @@ export function AIGeneratorPage({ setCurrentPage }: Props) {
         destination: city,
         days: duration,
         travelers: people,
-        budget: budget as any,
-        preferences, // array → akan di-mapping di api.ts
+        preferences,
+        customMessage,
+        minBudget,
+        maxBudget,
       })
 
       setProgress(70)
@@ -256,25 +273,6 @@ export function AIGeneratorPage({ setCurrentPage }: Props) {
 
   return (
     <div className="pt-16 min-h-screen">
-      {/* ── Header ── */}
-      <div className="aurora-bg-mesh py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex items-center gap-4 mb-6">
-            <Button variant="ghost" size="icon" className="text-white" onClick={() => setCurrentPage("home")}>
-              <ArrowLeft className="w-4 h-4" />
-            </Button>
-            <div>
-              <Badge variant="glass" className="mb-2">✨ AI Powered</Badge>
-              <h1 className="text-3xl md:text-4xl font-black text-white">
-                AI Itinerary Generator
-              </h1>
-              <p className="text-white/70 mt-1">
-                Masukkan preferensimu, biarkan AI membuat rencana trip sempurna
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="grid lg:grid-cols-3 gap-8">
@@ -359,24 +357,55 @@ export function AIGeneratorPage({ setCurrentPage }: Props) {
                 />
               </div>
 
-              {/* Budget — FIXED: maps to correct enum */}
-              <div className="space-y-2">
-                <Label>Budget</Label>
-                <div className="grid grid-cols-3 gap-2">
-                  {BUDGET_OPTIONS.map(b => (
-                    <button
-                      key={b.id}
-                      onClick={() => setBudget(budget === b.id ? "" : b.id)}
-                      className={cn(
-                        "py-2.5 rounded-xl text-sm font-medium transition-all",
-                        budget === b.id
-                          ? "bg-gradient-to-br from-[var(--aurora-start)] to-[var(--aurora-end)] text-white shadow-md"
-                          : "bg-secondary hover:bg-secondary/80"
-                      )}
-                    >
-                      {b.label}
-                    </button>
-                  ))}
+              {/* Budget — Dual-thumb range slider */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="!mb-0">Budget</Label>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {formatRupiah(minBudget)} — {formatRupiah(maxBudget)}
+                  </span>
+                </div>
+                <div className="relative h-6">
+                  {/* Track background */}
+                  <div className="absolute top-1/2 -translate-y-1/2 w-full h-1.5 rounded-full bg-secondary" />
+                  {/* Active track */}
+                  <div
+                    className="absolute top-1/2 -translate-y-1/2 h-1.5 rounded-full bg-gradient-to-r from-[var(--aurora-start)] to-[var(--aurora-end)]"
+                    style={{
+                      left: `${((minBudget - BUDGET_MIN) / (BUDGET_MAX - BUDGET_MIN)) * 100}%`,
+                      right: `${100 - ((maxBudget - BUDGET_MIN) / (BUDGET_MAX - BUDGET_MIN)) * 100}%`,
+                    }}
+                  />
+                  {/* Min handle */}
+                  <input
+                    type="range"
+                    min={BUDGET_MIN}
+                    max={BUDGET_MAX}
+                    step={50000}
+                    value={minBudget}
+                    onChange={e => {
+                      const val = Number(e.target.value)
+                      if (val < maxBudget) setMinBudget(val)
+                    }}
+                    className="absolute w-full h-full appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[var(--aurora-start)] [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:shadow-lg [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-[var(--aurora-start)] [&::-moz-range-thumb]:cursor-pointer"
+                  />
+                  {/* Max handle */}
+                  <input
+                    type="range"
+                    min={BUDGET_MIN}
+                    max={BUDGET_MAX}
+                    step={50000}
+                    value={maxBudget}
+                    onChange={e => {
+                      const val = Number(e.target.value)
+                      if (val > minBudget) setMaxBudget(val)
+                    }}
+                    className="absolute w-full h-full appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[var(--aurora-end)] [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:shadow-lg [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-[var(--aurora-end)] [&::-moz-range-thumb]:cursor-pointer"
+                  />
+                </div>
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>{formatRupiah(BUDGET_MIN)}</span>
+                  <span>{formatRupiah(BUDGET_MAX)}</span>
                 </div>
               </div>
 
@@ -405,6 +434,23 @@ export function AIGeneratorPage({ setCurrentPage }: Props) {
                   })}
                 </div>
               </div>
+
+              {/* Custom Message */}
+              {preferences.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <span>Catatan Khusus</span>
+                    <Badge variant="outline" className="text-xs">Opsional</Badge>
+                  </Label>
+                  <textarea
+                    value={customMessage}
+                    onChange={e => setCustomMessage(e.target.value)}
+                    placeholder="Tidak ada opsi yang cocok? Tulis request khusus di sini... Contoh: 'Saya suka tempat yang tenang untuk fotografi'"
+                    className="w-full h-20 rounded-xl border border-input bg-background px-4 py-2.5 text-sm resize-none"
+                    rows={3}
+                  />
+                </div>
+              )}
 
               {/* Error */}
               {error && (
@@ -476,7 +522,7 @@ export function AIGeneratorPage({ setCurrentPage }: Props) {
                       <div>
                         <p className="font-bold">Itinerary Generated!</p>
                         <p className="text-sm text-muted-foreground">
-                          {city} · {duration} hari · {people} orang{budget ? ` · ${budget}` : ""}
+                          {city} · {duration} hari · {people} orang · {formatRupiah(minBudget)}–{formatRupiah(maxBudget)}
                         </p>
                       </div>
                     </div>
@@ -676,7 +722,7 @@ export function AIGeneratorPage({ setCurrentPage }: Props) {
                       <RotateCcw className="w-4 h-4 mr-2" />Generate Ulang
                     </Button>
                     {savedTripId ? (
-                      <Button variant="outline" onClick={() => setCurrentPage("editor")}>
+                      <Button variant="outline" onClick={() => navigateTo("editor")}>
                         <Check className="w-4 h-4 mr-2" />Lihat di Editor
                       </Button>
                     ) : (

@@ -5,7 +5,7 @@ import {
   AlertTriangle, Sun, Cloud, CloudRain, Eye,
   Users, ArrowLeft, Search, Filter, Layers, Settings,
   Navigation, Trash2, Edit3, Copy, ExternalLink, Map as MapIcon2,
-  Loader2, X, Check, Map as MapIcon, Plane, Calendar, ChevronRight
+  Loader2, X, Check, Map as MapIcon, Plane, Calendar, ChevronRight, PanelLeftClose, Sparkles
 } from "lucide-react"
 import { Button } from "../components/ui/button"
 import { Badge } from "../components/ui/badge"
@@ -19,6 +19,9 @@ import { useState, useEffect, useRef, useCallback } from "react"
 import { getTrips, createTrip, getItinerary, addItineraryItem } from "../lib/supabase"
 import { searchPlaces } from "../lib/api"
 import { TripMap } from "../components/TripMap"
+import { TripAIPanel } from "../components/TripAIPanel"
+import { PlaceDetailModal } from "../components/PlaceDetailModal"
+import { ReminderPanel } from "../components/ReminderPanel"
 import type { Trip, ItineraryItem } from "../lib/supabase"
 
 // ─── Destination types map ────────────────────────────────
@@ -35,12 +38,19 @@ const destinationTypes: Record<string, { icon: typeof MapPin; color: string }> =
 function getWeatherEmoji(dayIndex: number): string { return [Sun, Cloud, CloudRain][dayIndex % 3].name === "CloudRain" ? "🌧️" : [Sun, Cloud, CloudRain][dayIndex % 3].name === "Cloud" ? "⛅" : "☀️" }
 
 // ─── Destination Card (from real data) ────────────────────
-function DestinationCard({ item, dayIndex, index }: { item: ItineraryItem; dayIndex: number; index: number }) {
+function DestinationCard({ item, dayIndex, index, onSelect }: { item: ItineraryItem; dayIndex: number; index: number; onSelect: (item: ItineraryItem) => void }) {
   const type = destinationTypes[item.category] || destinationTypes.landmark
   const Icon = type.icon
 
   return (
-    <motion.div layout initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="destination-card group">
+    <motion.div
+      layout
+      initial={{ opacity: 0, x: -20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 20 }}
+      className="destination-card group cursor-pointer"
+      onClick={() => onSelect(item)}
+    >
       <div className="flex items-start gap-4">
         <div className="flex flex-col items-center gap-2">
           <button className="p-1 rounded hover:bg-white/10 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity">
@@ -58,9 +68,9 @@ function DestinationCard({ item, dayIndex, index }: { item: ItineraryItem; dayIn
               <h4 className="font-semibold text-base">{item.title}</h4>
             </div>
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button className="p-1 rounded hover:bg-white/10"><Edit3 className="w-4 h-4 text-muted-foreground" /></button>
-              <button className="p-1 rounded hover:bg-white/10"><Copy className="w-4 h-4 text-muted-foreground" /></button>
-              <button className="p-1 rounded hover:bg-red-500/10"><Trash2 className="w-4 h-4 text-red-400" /></button>
+              <button className="p-1 rounded hover:bg-white/10" onClick={(e) => { e.stopPropagation() }}><Edit3 className="w-4 h-4 text-muted-foreground" /></button>
+              <button className="p-1 rounded hover:bg-white/10" onClick={(e) => { e.stopPropagation() }}><Copy className="w-4 h-4 text-muted-foreground" /></button>
+              <button className="p-1 rounded hover:bg-red-500/10" onClick={(e) => { e.stopPropagation() }}><Trash2 className="w-4 h-4 text-red-400" /></button>
             </div>
           </div>
 
@@ -222,12 +232,12 @@ function groupItemsByDay(items: ItineraryItem[]): DayGroup[] {
 
 // ─── Main Page ────────────────────────────────────────────
 interface TripEditorProps {
-  setCurrentPage: (page: "landing" | "login" | "register" | "home" | "editor" | "ai" | "splitbill" | "explore" | "profile" | "achievements" | "bucketlist" | "settings" | "notifications") => void
+  navigateTo: (page: "landing" | "login" | "register" | "home" | "editor" | "ai" | "splitbill" | "explore" | "profile" | "achievements" | "bucketlist" | "settings" | "notifications") => void
   sidebarCollapsed?: boolean
   onToggleSidebar?: () => void
 }
 
-export function TripEditorPage({ setCurrentPage, sidebarCollapsed = false, onToggleSidebar }: TripEditorProps) {
+export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleSidebar }: TripEditorProps) {
   const [trips, setTrips] = useState<Trip[]>([])
   const [tripsLoading, setTripsLoading] = useState(true)
   const [tripsError, setTripsError] = useState("")
@@ -238,6 +248,16 @@ export function TripEditorPage({ setCurrentPage, sidebarCollapsed = false, onTog
   const [mapView, setMapView] = useState<"day" | "full">("day")
   const [searchQuery, setSearchQuery] = useState("")
   const [showTripList, setShowTripList] = useState(true)
+  const [aiPanelOpen, setAiPanelOpen] = useState(false)
+  const [selectedItem, setSelectedItem] = useState<ItineraryItem | null>(null)
+
+  // Refresh itinerary items from DB
+  const refreshItems = useCallback(() => {
+    if (!selectedTrip) return
+    getItinerary(selectedTrip.id)
+      .then(data => setItineraryItems(data))
+      .catch(() => setItineraryItems([]))
+  }, [selectedTrip])
 
   // Load trips on mount
   useEffect(() => {
@@ -285,10 +305,10 @@ export function TripEditorPage({ setCurrentPage, sidebarCollapsed = false, onTog
   const totalDestinations = itineraryItems.length
 
   return (
-    <div className="min-h-screen flex">
-      {/* ── Left Sidebar — collapsible ── */}
+    <div className="h-screen flex overflow-hidden">
+      {/* ── Left Sidebar — collapsible, scrolling independent ── */}
       <div className={`
-        border-r border-border flex flex-col bg-background/50 backdrop-blur-sm
+        shrink-0 border-r border-border flex flex-col bg-background/50 backdrop-blur-sm h-screen
         transition-all duration-300 ease-out
         ${sidebarCollapsed ? "w-0 overflow-hidden" : "w-[420px]"}
       `}>
@@ -412,7 +432,7 @@ export function TripEditorPage({ setCurrentPage, sidebarCollapsed = false, onTog
           ) : currentDay && currentDay.items.length > 0 ? (
             <>
               {currentDay.items.map((item, i) => (
-                <DestinationCard key={item.id} item={item} dayIndex={selectedDay} index={i} />
+                <DestinationCard key={item.id} item={item} dayIndex={selectedDay} index={i} onSelect={setSelectedItem} />
               ))}
             </>
           ) : trips.length > 0 && selectedTrip ? (
@@ -421,7 +441,7 @@ export function TripEditorPage({ setCurrentPage, sidebarCollapsed = false, onTog
               <MapIcon className="w-10 h-10 mx-auto mb-3 opacity-20" />
               <p className="text-sm font-medium mb-1">Belum ada itinerary</p>
               <p className="text-xs opacity-70 mb-4">Generate itinerary dengan AI atau tambah manual</p>
-              <Button variant="outline" size="sm" onClick={() => setCurrentPage("ai")}>
+              <Button variant="outline" size="sm" onClick={() => navigateTo("ai")}>
                 <Plane className="w-4 h-4 mr-2" />Generate dengan AI
               </Button>
             </div>
@@ -437,6 +457,13 @@ export function TripEditorPage({ setCurrentPage, sidebarCollapsed = false, onTog
             <Button variant="glass" className="w-full" size="lg">
               <Plus className="w-4 h-4 mr-2" />Tambah Destinasi
             </Button>
+          )}
+
+          {/* Reminder Panel */}
+          {selectedTrip && (
+            <div className="pt-4 border-t border-border/50">
+              <ReminderPanel tripId={selectedTrip.id} />
+            </div>
           )}
         </div>
 
@@ -460,20 +487,38 @@ export function TripEditorPage({ setCurrentPage, sidebarCollapsed = false, onTog
       </div>
 
       {/* ── Right — Map ── */}
-      <div className="flex-1 relative">
+      <div className="flex-1 relative h-screen overflow-hidden">
+        {/* Deep aurora gradient background — prevents clash with white floating navbar */}
+        <div className="absolute inset-0 bg-gradient-to-br from-[#0f0f1a] via-[#1a1a2e] to-[#0f1729]" />
+
+        {/* Floating controls — z-10 above gradient + map */}
         <div className="absolute top-4 left-4 right-4 z-10 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            {/* Expand sidebar toggle */}
+            {/* Back to dashboard */}
+            <Button
+              variant="glass"
+              size="sm"
+              onClick={() => navigateTo("home")}
+              aria-label="Kembali ke dashboard"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span className="ml-1 text-sm hidden sm:inline">Kembali</span>
+            </Button>
+
+            {/* Sidebar toggle */}
             <Button
               variant="glass"
               size="sm"
               onClick={onToggleSidebar}
-              aria-label="Perluas sidebar"
+              aria-label={sidebarCollapsed ? "Perluas sidebar" : "Persempit sidebar"}
               className={sidebarCollapsed ? "bg-white/20" : ""}
             >
-              <ChevronRight className={`w-4 h-4 rotate-180 ${sidebarCollapsed ? "" : "opacity-60"}`} />
-              <span className="ml-1 text-sm">{sidebarCollapsed ? "Lihat Trip" : "Persempit"}</span>
+              <PanelLeftClose className="w-4 h-4" />
+              <span className="ml-1 text-sm hidden sm:inline">{sidebarCollapsed ? "Sidebar" : "Sembunyikan"}</span>
             </Button>
+
+            <div className="h-5 w-px bg-white/20 hidden sm:block" />
+
             <Button variant="glass" size="sm" className={mapView === "day" ? "bg-white/20" : ""} onClick={() => setMapView("day")}>
               <Layers className="w-4 h-4 mr-1" />Hari Ini
             </Button>
@@ -488,27 +533,61 @@ export function TripEditorPage({ setCurrentPage, sidebarCollapsed = false, onTog
           </div>
         </div>
 
-        {/* Map */}
+        {/* Map or empty state */}
         {selectedTrip && mapLocations.length > 0 ? (
-          <TripMap
-            locations={mapLocations}
-            height="100%"
-            zoom={13}
-          />
+          <div className="absolute inset-0 z-0">
+            <TripMap
+              locations={mapLocations}
+              height="100%"
+              zoom={13}
+            />
+          </div>
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-ocean-900 to-ocean-950 text-white/60">
+          <div className="absolute inset-0 z-0 flex flex-col items-center justify-center text-white/60">
             <MapIcon className="w-16 h-16 mb-4 opacity-30" />
             <p className="text-lg font-medium">{selectedTrip ? "Belum ada lokasi di peta" : "Pilih trip untuk melihat peta"}</p>
             <p className="text-sm text-white/40 mt-1">
               {selectedTrip ? "Tambah destinasi atau generate dengan AI" : "Atau buat trip baru untuk memulai"}
             </p>
             {selectedTrip && (
-              <Button variant="gradient" size="sm" className="mt-4" onClick={() => setCurrentPage("ai")}>
+              <Button variant="gradient" size="sm" className="mt-4" onClick={() => navigateTo("ai")}>
                 <Plane className="w-4 h-4 mr-2" />Generate dengan AI
               </Button>
             )}
           </div>
         )}
+
+        {/* AI FAB Button — floating bottom-right, z-20 above everything */}
+        <div className="absolute bottom-6 right-6 z-20">
+          <Button
+            variant="gradient"
+            size="lg"
+            className="rounded-2xl shadow-lg shadow-[#667eea]/40 flex items-center gap-2 h-12 px-5"
+            onClick={() => setAiPanelOpen(true)}
+          >
+            <Sparkles className="w-5 h-5" />
+            <span className="font-semibold">TripAI</span>
+          </Button>
+        </div>
+
+        {/* AI Chat Panel */}
+        {selectedTrip && (
+          <TripAIPanel
+            open={aiPanelOpen}
+            onClose={() => setAiPanelOpen(false)}
+            trip={selectedTrip}
+            itineraryItems={itineraryItems}
+            onItemsChanged={refreshItems}
+            currentDay={selectedDay}
+          />
+        )}
+
+        {/* Place Detail Modal */}
+        <PlaceDetailModal
+          item={selectedItem}
+          onClose={() => setSelectedItem(null)}
+          onDeleted={refreshItems}
+        />
       </div>
     </div>
   )

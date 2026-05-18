@@ -1,7 +1,7 @@
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import {
-  ArrowLeft, Award, Star, Trophy, Medal, Zap, Target,
-  ChevronRight, Check, Lock, Loader2
+  Award, Star, Trophy, Medal, Zap, Target,
+  ChevronRight, Check, Lock, Loader2, Gift, X
 } from "lucide-react"
 import { Button } from "../components/ui/button"
 import { Badge } from "../components/ui/badge"
@@ -9,12 +9,14 @@ import { Progress } from "../components/ui/progress"
 import { cn } from "@/lib/utils"
 import { useState, useEffect } from "react"
 import { getTrips } from "../lib/supabase"
+import { supabase } from "@/lib/supabase"
 import type { Trip } from "../lib/supabase"
+import confetti from "canvas-confetti"
 
 type Page = "landing" | "login" | "register" | "home" | "editor" | "ai" | "splitbill" | "explore" | "profile" | "achievements" | "bucketlist" | "settings" | "notifications"
 
 interface AchievementsProps {
-  setCurrentPage: (page: Page) => void
+  navigateTo: (page: Page) => void
 }
 
 // Real badge definitions — unlocked state derived from user data
@@ -47,9 +49,11 @@ const levelColors = {
   platinum: { bg: "from-purple-400 to-purple-700", text: "text-purple-400", glow: "shadow-purple-400/30" },
 }
 
-export function Achievements({ setCurrentPage }: AchievementsProps) {
+export function Achievements({ navigateTo }: AchievementsProps) {
   const [trips, setTrips] = useState<Trip[]>([])
   const [loading, setLoading] = useState(true)
+  const [claimedSet, setClaimedSet] = useState<Set<number>>(new Set())
+  const [celebrationBadge, setCelebrationBadge] = useState<typeof BADGE_DEFINITIONS[0] | null>(null)
 
   useEffect(() => {
     getTrips()
@@ -97,21 +101,50 @@ export function Achievements({ setCurrentPage }: AchievementsProps) {
   const points = computedBadges.reduce((sum, b) => sum + (b.unlocked ? 100 : Math.floor(b.progress * 0.5)), 0)
   const level = Math.max(1, Math.floor(unlockedBadges / 3) + 1)
 
+  // ── Celebration & Claim ────────────────────────────────────
+  const fireConfetti = (badge: typeof BADGE_DEFINITIONS[0]) => {
+    confetti({
+      particleCount: 120,
+      spread: 80,
+      origin: { y: 0.6 },
+      colors: ["#667eea", "#764ba2", "#f093fb", "#ffd700", "#ff6b6b"],
+    })
+    setTimeout(() => confetti({
+      particleCount: 60,
+      spread: 60,
+      origin: { y: 0.5 },
+      colors: ["#667eea", "#764ba2", "#f093fb"],
+    }), 300)
+  }
+
+  const handleClaim = async (badge: typeof BADGE_DEFINITIONS[0]) => {
+    if (claimedSet.has(badge.id)) return
+    setClaimedSet(prev => new Set([...prev, badge.id]))
+    fireConfetti(badge)
+    setCelebrationBadge(badge)
+    // Persist claim to DB
+    if (supabase) {
+      try {
+        const { getSession } = await import("@/lib/supabase")
+        const session = await getSession()
+        const userId = session?.user?.id
+        if (userId) {
+          await supabase.from("user_achievements").upsert({
+            user_id: userId,
+            achievement_id: String(badge.id),
+            earned_at: new Date().toISOString(),
+            claimed_at: new Date().toISOString(),
+            notified: true,
+          }, { onConflict: "user_id,achievement_id" })
+        }
+      } catch (err) {
+        console.error("Claim achievement error:", err)
+      }
+    }
+  }
+
   return (
     <div className="pt-16 min-h-screen">
-      {/* Header */}
-      <div className="sticky top-16 z-40 glass-card border-b border-white/10 px-4 sm:px-6 lg:px-8 py-4">
-        <div className="max-w-4xl mx-auto flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => setCurrentPage("home")}>
-            <ArrowLeft className="w-4 h-4" />
-          </Button>
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            <Award className="w-5 h-5 text-amber-500" />
-            Achievements
-          </h1>
-        </div>
-      </div>
-
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Profile Stats */}
         <motion.div
@@ -205,11 +238,19 @@ export function Achievements({ setCurrentPage }: AchievementsProps) {
                     )}
 
                     {badge.unlocked && (
-                      <div className="mt-3">
-                        <Badge variant="aurora" className="text-xs">
-                          <Check className="w-3 h-3 mr-1" />
-                          Unlocked
-                        </Badge>
+                      <div className="mt-3 flex flex-col gap-1.5">
+                        <Button
+                          variant={claimedSet.has(badge.id) ? "ghost" : "gradient"}
+                          size="sm"
+                          className="w-full text-xs h-8"
+                          onClick={() => handleClaim(badge)}
+                        >
+                          {claimedSet.has(badge.id) ? (
+                            <><Check className="w-3 h-3 mr-1" />Diklaim</>
+                          ) : (
+                            <><Gift className="w-3 h-3 mr-1" />Klaim +100 XP</>
+                          )}
+                        </Button>
                       </div>
                     )}
                   </motion.div>
@@ -219,6 +260,41 @@ export function Achievements({ setCurrentPage }: AchievementsProps) {
           )
         })}
       </div>
+
+      {/* Celebration Popup */}
+      <AnimatePresence>
+        {celebrationBadge && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            onClick={() => setCelebrationBadge(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.5, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              transition={{ type: "spring", damping: 15, stiffness: 300 }}
+              className="glass-card p-8 text-center max-w-sm mx-4 space-y-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className={cn("w-24 h-24 rounded-3xl mx-auto bg-gradient-to-br flex items-center justify-center text-5xl shadow-xl", levelColors[celebrationBadge.level as keyof typeof levelColors].bg)}>
+                {celebrationBadge.emoji}
+              </div>
+              <div>
+                <Badge className="mb-2">✨ Badge Earned!</Badge>
+                <h2 className="text-xl font-black">{celebrationBadge.name}</h2>
+                <p className="text-sm text-muted-foreground mt-1">{celebrationBadge.desc}</p>
+                <p className="text-2xl font-black gradient-text mt-2">+100 XP</p>
+              </div>
+              <Button variant="gradient" className="w-full" onClick={() => setCelebrationBadge(null)}>
+                <Check className="w-4 h-4 mr-2" /> keren!
+              </Button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

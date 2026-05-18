@@ -11,11 +11,12 @@ import { Input } from "../components/ui/input"
 import { cn } from "@/lib/utils"
 import { useState, useEffect } from "react"
 import { supabase } from "../lib/supabase"
+import { TripDetailModal } from "../components/TripDetailModal"
 
 type Page = "landing" | "login" | "register" | "home" | "editor" | "ai" | "splitbill" | "explore" | "profile" | "achievements" | "bucketlist" | "settings" | "notifications"
 
 interface ExploreProps {
-  setCurrentPage: (page: Page) => void
+  navigateTo: (page: Page) => void
 }
 
 const categories = [
@@ -55,16 +56,167 @@ const GRADIENTS = [
   "from-cyan-400 via-blue-500 to-indigo-600",
 ]
 
-export function Explore({ setCurrentPage }: ExploreProps) {
+// Mock trending trips for dev mode
+const MOCK_TRIPS: PublicTrip[] = [
+  {
+    id: "mock-1",
+    trip_id: "mock-1",
+    name: "3 Hari Menjelajahi Bali Utara",
+    destination: "Bali, Indonesia",
+    start_date: "2026-06-15",
+    end_date: "2026-06-17",
+    status: "planning",
+    days: 3,
+    places: 8,
+    likes: 1243,
+    comments: 89,
+    rating: 4.9,
+    gradient: "from-emerald-400 via-teal-500 to-blue-500",
+    tags: ["beach", "culture"],
+    author: "traveler_bali",
+    authorAvatar: "TB",
+  },
+  {
+    id: "mock-2",
+    trip_id: "mock-2",
+    name: "Weekend Food Tour Jakarta",
+    destination: "Jakarta, Indonesia",
+    start_date: "2026-05-25",
+    end_date: "2026-05-26",
+    status: "active",
+    days: 2,
+    places: 12,
+    likes: 892,
+    comments: 56,
+    rating: 4.7,
+    gradient: "from-rose-400 via-purple-500 to-indigo-600",
+    tags: ["culinary", "city"],
+    author: "foodie_jkt",
+    authorAvatar: "FJ",
+  },
+  {
+    id: "mock-3",
+    trip_id: "mock-3",
+    name: "Petualangan Gunung Bromo",
+    destination: "Bromo, Jawa Timur",
+    start_date: "2026-07-01",
+    end_date: "2026-07-02",
+    status: "planning",
+    days: 2,
+    places: 5,
+    likes: 2156,
+    comments: 134,
+    rating: 4.8,
+    gradient: "from-amber-400 via-orange-500 to-red-600",
+    tags: ["mountain", "nature"],
+    author: "adventure_seeker",
+    authorAvatar: "AS",
+  },
+  {
+    id: "mock-4",
+    trip_id: "mock-4",
+    name: "Romantis di Yogyakarta",
+    destination: "Yogyakarta, Indonesia",
+    start_date: "2026-08-10",
+    end_date: "2026-08-13",
+    status: "planning",
+    days: 4,
+    places: 10,
+    likes: 1567,
+    comments: 98,
+    rating: 4.9,
+    gradient: "from-pink-400 via-rose-500 to-red-500",
+    tags: ["culture", "city"],
+    author: "yogi_lover",
+    authorAvatar: "YL",
+  },
+  {
+    id: "mock-5",
+    trip_id: "mock-5",
+    name: "Surf Camp di Lombok",
+    destination: "Lombok, NTB",
+    start_date: "2026-09-05",
+    end_date: "2026-09-09",
+    status: "planning",
+    days: 5,
+    places: 7,
+    likes: 1893,
+    comments: 112,
+    rating: 4.8,
+    gradient: "from-cyan-400 via-blue-500 to-indigo-600",
+    tags: ["beach", "nature"],
+    author: "surf_chick",
+    authorAvatar: "SC",
+  },
+  {
+    id: "mock-6",
+    trip_id: "mock-6",
+    name: "Road Trip Bandung ke Ciwidey",
+    destination: "Bandung, Jawa Barat",
+    start_date: "2026-05-30",
+    end_date: "2026-06-01",
+    status: "active",
+    days: 3,
+    places: 9,
+    likes: 756,
+    comments: 43,
+    rating: 4.6,
+    gradient: "from-fuchsia-400 via-pink-500 to-rose-600",
+    tags: ["mountain", "culinary"],
+    author: "roadtrippers",
+    authorAvatar: "RT",
+  },
+  {
+    id: "mock-7",
+    trip_id: "mock-7",
+    name: "Diving Paradise Raja Ampat",
+    destination: "Raja Ampat, Papua",
+    start_date: "2026-10-15",
+    end_date: "2026-10-22",
+    status: "planning",
+    days: 7,
+    places: 6,
+    likes: 3421,
+    comments: 201,
+    rating: 4.9,
+    gradient: "from-cyan-400 via-blue-500 to-indigo-600",
+    tags: ["beach", "nature"],
+    author: "dive_master",
+    authorAvatar: "DM",
+  },
+  {
+    id: "mock-8",
+    trip_id: "mock-8",
+    name: "City Break di Surabaya",
+    destination: "Surabaya, Jawa Timur",
+    start_date: "2026-06-20",
+    end_date: "2026-06-21",
+    status: "completed",
+    days: 2,
+    places: 8,
+    likes: 432,
+    comments: 28,
+    rating: 4.5,
+    gradient: "from-rose-400 via-purple-500 to-indigo-600",
+    tags: ["city", "culinary"],
+    author: "surabaya_native",
+    authorAvatar: "SN",
+  },
+]
+
+export function Explore({ navigateTo }: ExploreProps) {
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [searchQuery, setSearchQuery] = useState("")
   const [sortBy, setSortBy] = useState<"popular" | "recent" | "rating">("popular")
   const [likedTrips, setLikedTrips] = useState<string[]>([])
   const [trips, setTrips] = useState<PublicTrip[]>([])
   const [loading, setLoading] = useState(true)
+  const [selectedTrip, setSelectedTrip] = useState<PublicTrip | null>(null)
 
   useEffect(() => {
     if (!supabase) {
+      // Dev mode: show mock trending trips
+      setTrips(MOCK_TRIPS)
       setLoading(false)
       return
     }
@@ -81,8 +233,8 @@ export function Explore({ setCurrentPage }: ExploreProps) {
       .limit(20)
       .then(({ data, error }) => {
         if (error || !data || data.length === 0) {
-          // No trips yet — show empty state
-          setTrips([])
+          // No trips yet — fallback to mock data
+          setTrips(MOCK_TRIPS)
         } else {
           setTrips(data.map((t, i) => ({
             id: t.id,
@@ -109,10 +261,33 @@ export function Explore({ setCurrentPage }: ExploreProps) {
       })
   }, [])
 
-  const toggleLike = (id: string) => {
+  const toggleLike = async (id: string) => {
+    const isLiked = likedTrips.includes(id)
     setLikedTrips(prev =>
       prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
     )
+    if (!supabase) return
+    try {
+      const { getSession } = await import("../lib/supabase")
+      const session = await getSession()
+      const userId = session?.user?.id
+      if (!userId) return
+      const trip = trips.find(t => t.id === id)
+      if (!trip) return
+      if (!isLiked) {
+        await supabase.from("bucket_list").upsert({
+          user_id: userId,
+          trip_id: id,
+          trip_name: trip.name,
+          destination: trip.destination,
+          created_at: new Date().toISOString(),
+        })
+      } else {
+        await supabase.from("bucket_list").delete().match({ user_id: userId, trip_id: id })
+      }
+    } catch (err) {
+      console.error("Toggle like error:", err)
+    }
   }
 
   const filteredTrips = trips.filter(trip => {
@@ -205,9 +380,9 @@ export function Explore({ setCurrentPage }: ExploreProps) {
             <p className="text-muted-foreground mb-6 max-w-md mx-auto">
               Jadilah yang pertama mempublish tripmu! Buat itinerary dan bagikan ke komunitas.
             </p>
-            <Button variant="gradient" onClick={() => setCurrentPage("ai")}>
+            <Button variant="gradient" onClick={() => navigateTo("editor")}>
               <Plane className="w-4 h-4 mr-2" />
-              Generate Trip dengan AI
+              Buat Trip Baru
             </Button>
           </div>
         ) : (
@@ -220,6 +395,7 @@ export function Explore({ setCurrentPage }: ExploreProps) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
                 className="glass-card-hover overflow-hidden group cursor-pointer"
+                onClick={() => setSelectedTrip(trip)}
               >
                 {/* Image */}
                 <div className={`aspect-[4/3] rounded-t-2xl bg-gradient-to-br ${trip.gradient} relative overflow-hidden`}>
@@ -238,7 +414,18 @@ export function Explore({ setCurrentPage }: ExploreProps) {
                     >
                       <Heart className={cn("w-4 h-4", likedTrips.includes(trip.id) && "fill-current")} />
                     </button>
-                    <button className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/30 transition-all">
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation()
+                        const url = `${window.location.origin}/explore?trip=${trip.id}`
+                        if (navigator.share) {
+                          try { await navigator.share({ title: trip.name, text: `Check out this trip: ${trip.name}`, url }) } catch {}
+                        } else {
+                          await navigator.clipboard.writeText(url)
+                        }
+                      }}
+                      className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/30 transition-all"
+                    >
                       <Share2 className="w-4 h-4" />
                     </button>
                   </div>
@@ -306,6 +493,12 @@ export function Explore({ setCurrentPage }: ExploreProps) {
           </div>
         )}
       </div>
+
+      {/* Trip Detail Modal */}
+      <TripDetailModal
+        trip={selectedTrip}
+        onClose={() => setSelectedTrip(null)}
+      />
     </div>
   )
 }

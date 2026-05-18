@@ -51,6 +51,12 @@ export interface GenerateItineraryPayload {
   start_date?: string
   /** Legacy: comma-separated string (still supported) */
   preferences_raw?: string
+  /** Custom message for AI prompt */
+  customMessage?: string
+  /** Min budget in IDR */
+  minBudget?: number
+  /** Max budget in IDR */
+  maxBudget?: number
 }
 
 export interface GenerateItineraryResponse {
@@ -172,6 +178,9 @@ export async function generateItinerary(
       travelers: payload.travelers,
       start_date: payload.start_date,
       preferences: preferencesStr,
+      custom_message: payload.customMessage,
+      min_budget: payload.minBudget,
+      max_budget: payload.maxBudget,
     }),
   })
 }

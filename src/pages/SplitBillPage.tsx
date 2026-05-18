@@ -4,7 +4,7 @@ import {
   Check, Copy, Receipt, DollarSign, CreditCard,
   CheckCircle2, Loader2,
   SplitSquareHorizontal, PieChart, Download, Share2,
-  Plus
+  Plus, MapPin
 } from "lucide-react"
 import { Button } from "../components/ui/button"
 import { Badge } from "../components/ui/badge"
@@ -16,8 +16,9 @@ import { Avatar, AvatarFallback } from "../components/ui/avatar"
 import { Separator } from "../components/ui/separator"
 import { cn, formatCurrency } from "../lib/utils"
 import { useState, useEffect } from "react"
-import { getSplitBills } from "../lib/supabase"
-import type { SplitBillItem } from "../lib/supabase"
+import { getSplitBills, getTrips } from "../lib/supabase"
+import type { SplitBillItem, Trip } from "../lib/supabase"
+import { supabase } from "../lib/supabase"
 
 const CATEGORY_COLORS: Record<string, string> = {
   hotel: "from-blue-400 to-cyan-400",
@@ -30,15 +31,34 @@ const CATEGORY_COLORS: Record<string, string> = {
 }
 
 interface SplitBillProps {
-  setCurrentPage: (page: "landing" | "login" | "register" | "home" | "editor" | "ai" | "splitbill" | "explore" | "profile" | "achievements" | "bucketlist" | "settings" | "notifications") => void
+  navigateTo: (page: "landing" | "login" | "register" | "home" | "editor" | "ai" | "splitbill" | "explore" | "profile" | "achievements" | "bucketlist" | "settings" | "notifications") => void
 }
 
-export function SplitBillPage({ setCurrentPage }: SplitBillProps) {
+export function SplitBillPage({ navigateTo }: SplitBillProps) {
   const [splitMode, setSplitMode] = useState<"equal" | "custom">("equal")
   const [sendingEmail, setSendingEmail] = useState(false)
   const [emailSent, setEmailSent] = useState(false)
   const [bills, setBills] = useState<SplitBillItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [userTrips, setUserTrips] = useState<Trip[]>([])
+  const [selectedTripId, setSelectedTripId] = useState<string | null>(null)
+
+  // Load user's trips
+  useEffect(() => {
+    getTrips()
+      .then(setUserTrips)
+      .catch(() => setUserTrips([]))
+  }, [])
+
+  // Load split bills when selected trip changes
+  useEffect(() => {
+    if (!selectedTripId) { setBills([]); setLoading(false); return }
+    setLoading(true)
+    getSplitBills(selectedTripId)
+      .then(setBills)
+      .catch(() => setBills([]))
+      .finally(() => setLoading(false))
+  }, [selectedTripId])
 
   // Participants derived from split bills
   const allParticipants = Array.from(new Set(
@@ -71,31 +91,77 @@ export function SplitBillPage({ setCurrentPage }: SplitBillProps) {
     setTimeout(() => setEmailSent(false), 3000)
   }
 
+  const handleExportPDF = () => {
+    if (typeof window === "undefined") return
+    // Generate simple text-based bill summary and download as .txt
+    // For real PDF, jspdf should be installed — fallback to clipboard copy
+    const selectedTrip = userTrips.find(t => t.id === selectedTripId)
+    const summary = [
+      `=== SPLIT BILL: ${selectedTrip?.name || "Trip"} ===`,
+      `Total: ${formatCurrency(total)}`,
+      `Anggota: ${allParticipants.join(", ")}`,
+      `Per Orang: ${formatCurrency(perPerson)}`,
+      "",
+      "--- Rincian ---",
+      ...bills.map(b => `${b.description} | ${formatCurrency(Number(b.amount))} | oleh ${b.paid_by}`),
+      "",
+      "--- Balance ---",
+      ...balances.map(m => `${m.name}: ${m.net >= 0 ? "+" : ""}${formatCurrency(m.net)} (${m.net >= 0 ? "Hak Terima" : "Hutang"})`),
+    ].join("\n")
+    navigator.clipboard.writeText(summary).catch(() => {})
+    alert("Rincian tagihan sudah disalin! Paste ke notes atau chat.")
+  }
+
+  const handleShare = async () => {
+    const selectedTrip = userTrips.find(t => t.id === selectedTripId)
+    const text = `Split Bill ${selectedTrip?.name}: Total ${formatCurrency(total)}, Per orang ${formatCurrency(perPerson)}`
+    if (navigator.share) {
+      try { await navigator.share({ title: "Split Bill", text }) } catch {}
+    } else {
+      await navigator.clipboard.writeText(text).catch(() => {})
+    }
+  }
+
   return (
     <div className="pt-16 min-h-screen">
-      {/* Header */}
-      <div className="aurora-bg py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex items-center gap-4 mb-6">
-            <Button variant="ghost" size="icon" className="text-white" onClick={() => setCurrentPage("home")}>
-              <ArrowLeft className="w-4 h-4" />
-            </Button>
-            <div>
-              <Badge variant="glass" className="mb-2">Split Bill</Badge>
-              <h1 className="text-3xl md:text-4xl font-black text-white">
-                Bagikan Tagihan Trip
-              </h1>
-              <p className="text-white/70 mt-1">
-                {bills.length > 0
-                  ? `${bills.length} item tagihan · ${allParticipants.length} anggota`
-                  : "Atur tagihan trip kamu di sini"}
-              </p>
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-black">Split Bill</h1>
+            <p className="text-sm text-muted-foreground">Bagikan tagihan trip dengan anggota</p>
+          </div>
+          <Button variant="gradient" size="sm" onClick={() => navigateTo("editor")}>
+            <Plus className="w-4 h-4 mr-1" />
+            Tambah Trip
+          </Button>
+        </div>
+
+        {/* Trip Selector */}
+        {userTrips.length > 0 && (
+          <div className="mb-6">
+            <Label className="mb-2 block">Pilih Trip</Label>
+            <div className="flex flex-wrap gap-2">
+              {userTrips.map((trip) => (
+                <button
+                  key={trip.id}
+                  onClick={() => setSelectedTripId(trip.id)}
+                  className={cn(
+                    "px-4 py-2 rounded-xl text-sm font-medium transition-all border",
+                    selectedTripId === trip.id
+                      ? "bg-gradient-to-r from-[var(--aurora-start)] to-[var(--aurora-end)] text-white border-transparent shadow-md"
+                      : "border-border hover:border-[var(--aurora-start)]/30 bg-white/5 hover:bg-white/10"
+                  )}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <MapPin className="w-3 h-3" />
+                    {trip.name}
+                  </span>
+                </button>
+              ))}
             </div>
           </div>
-        </div>
-      </div>
-
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        )}
         {/* Summary Cards */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -149,7 +215,7 @@ export function SplitBillPage({ setCurrentPage }: SplitBillProps) {
             <p className="text-muted-foreground mb-6 max-w-md mx-auto">
               Tambahkan pengeluaran trip kamu di editor untuk memulai split bill. Nanti bisa kirim rincian tagihan ke semua anggota via email.
             </p>
-            <Button variant="gradient" onClick={() => setCurrentPage("editor")}>
+            <Button variant="gradient" onClick={() => navigateTo("editor")}>
               <Plus className="w-4 h-4 mr-2" />
               Buat Trip & Tambah Tagihan
             </Button>
@@ -328,10 +394,10 @@ export function SplitBillPage({ setCurrentPage }: SplitBillProps) {
                 </Button>
 
                 <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" className="flex-1">
-                    <Download className="w-4 h-4 mr-1" />PDF
+                  <Button variant="ghost" size="sm" className="flex-1" onClick={handleExportPDF}>
+                    <Download className="w-4 h-4 mr-1" />Export
                   </Button>
-                  <Button variant="ghost" size="sm" className="flex-1">
+                  <Button variant="ghost" size="sm" className="flex-1" onClick={handleShare}>
                     <Share2 className="w-4 h-4 mr-1" />Share
                   </Button>
                 </div>
