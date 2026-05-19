@@ -3,7 +3,7 @@ import {
   MapPin, Calendar, Users, Star, Award,
   Edit3, Globe, Plane, Map, TrendingUp,
   ChevronRight, ExternalLink, Heart, MessageSquare, Share2,
-  Loader2
+  Loader2, UserPlus, UserMinus, Check
 } from "lucide-react"
 import { Button } from "../components/ui/button"
 import { Badge } from "../components/ui/badge"
@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs"
 import { cn } from "@/lib/utils"
 import { useState, useEffect } from "react"
 import { getTrips } from "../lib/supabase"
+import { supabase } from "../lib/supabase"
 import type { Trip } from "../lib/supabase"
 
 type Page = "landing" | "login" | "register" | "home" | "editor" | "ai" | "splitbill" | "explore" | "profile" | "achievements" | "bucketlist" | "settings" | "notifications"
@@ -27,6 +28,10 @@ export function Profile({ navigateTo, onLogout, user }: ProfileProps) {
   const [isOwnProfile] = useState(true)
   const [trips, setTrips] = useState<Trip[]>([])
   const [loading, setLoading] = useState(true)
+  const [followersCount, setFollowersCount] = useState(0)
+  const [followingCount, setFollowingCount] = useState(0)
+  const [isFollowing, setIsFollowing] = useState(false)
+  const [followLoading, setFollowLoading] = useState(false)
 
   useEffect(() => {
     getTrips()
@@ -34,6 +39,18 @@ export function Profile({ navigateTo, onLogout, user }: ProfileProps) {
       .catch(() => setTrips([]))
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    if (!user?.id || !supabase) return
+    // Load followers/following count
+    Promise.all([
+      supabase.from('user_follows').select('id', { count: 'exact', head: true }).eq('following_id', user.id),
+      supabase.from('user_follows').select('id', { count: 'exact', head: true }).eq('follower_id', user.id),
+    ]).then(([followersRes, followingRes]) => {
+      setFollowersCount(followersRes.count || 0)
+      setFollowingCount(followingRes.count || 0)
+    })
+  }, [user?.id])
 
   const countriesVisited = new Set(trips.map(t => t.destination)).size
   const completedCount = trips.filter(t => t.status === 'completed').length
@@ -43,14 +60,34 @@ export function Profile({ navigateTo, onLogout, user }: ProfileProps) {
     return sum + diff
   }, 0)
 
+  const handleFollow = async () => {
+    if (!user?.id || !supabase) return
+    setFollowLoading(true)
+    try {
+      if (isFollowing) {
+        await supabase.from('user_follows').delete().match({ follower_id: user.id, following_id: user.id })
+        setFollowersCount(prev => Math.max(0, prev - 1))
+        setIsFollowing(false)
+      } else {
+        await supabase.from('user_follows').insert({ follower_id: user.id, following_id: user.id })
+        setFollowersCount(prev => prev + 1)
+        setIsFollowing(true)
+      }
+    } catch (err) {
+      console.error('Follow error:', err)
+    } finally {
+      setFollowLoading(false)
+    }
+  }
+
   // Stats from real data
   const stats = {
     trips: trips.length,
     countries: countriesVisited,
     cities: countriesVisited,
     daysTraveled: Math.round(totalDays),
-    followers: 0,
-    following: 0,
+    followers: followersCount,
+    following: followingCount,
     totalLikes: 0,
   }
 
@@ -118,13 +155,33 @@ export function Profile({ navigateTo, onLogout, user }: ProfileProps) {
 
             {!isOwnProfile && (
               <div className="flex items-center justify-center gap-3 mt-6">
-                <Button variant="gradient" size="sm">
-                  <Users className="w-4 h-4 mr-1" />
-                  Follow
+                <Button
+                  variant={isFollowing ? "outline" : "gradient"}
+                  size="sm"
+                  onClick={handleFollow}
+                  disabled={followLoading}
+                  className={isFollowing ? "text-white border-white/30" : ""}
+                >
+                  {followLoading ? (
+                    <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                  ) : isFollowing ? (
+                    <><Check className="w-4 h-4 mr-1" />Following</>
+                  ) : (
+                    <><UserPlus className="w-4 h-4 mr-1" />Follow</>
+                  )}
                 </Button>
                 <Button variant="glass" size="sm" className="text-white">
                   <MessageSquare className="w-4 h-4 mr-1" />
                   Message
+                </Button>
+              </div>
+            )}
+
+            {isOwnProfile && (
+              <div className="flex items-center justify-center gap-3 mt-6">
+                <Button variant="glass" size="sm" className="text-white" onClick={() => navigateTo("settings")}>
+                  <Edit3 className="w-4 h-4 mr-1" />
+                  Edit Profile
                 </Button>
               </div>
             )}
