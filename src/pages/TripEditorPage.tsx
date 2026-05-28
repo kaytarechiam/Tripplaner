@@ -5,7 +5,8 @@ import {
   AlertTriangle, Sun, Cloud, CloudRain, Eye,
   Users, ArrowLeft, Search, Filter, Layers, Settings,
   Navigation, Trash2, Edit3, Copy, ExternalLink, Map as MapIcon2,
-  Loader2, X, Check, Map as MapIcon, Plane, Calendar, ChevronRight, PanelLeftClose, Sparkles
+  Loader2, X, Check, Map as MapIcon, Plane, Calendar, ChevronRight, PanelLeftClose, Sparkles,
+  Ticket
 } from "lucide-react"
 import { Button } from "../components/ui/button"
 import { Badge } from "../components/ui/badge"
@@ -37,10 +38,46 @@ const destinationTypes: Record<string, { icon: typeof MapPin; color: string }> =
 
 function getWeatherEmoji(dayIndex: number): string { return [Sun, Cloud, CloudRain][dayIndex % 3].name === "CloudRain" ? "🌧️" : [Sun, Cloud, CloudRain][dayIndex % 3].name === "Cloud" ? "⛅" : "☀️" }
 
+// ─── Get booking platforms for an item ─────────────────────
+function getBookingPlatforms(item: ItineraryItem) {
+  if (!item.location && !item.title) return []
+  const query = encodeURIComponent(item.location || item.title)
+  const category = item.category?.toLowerCase() || "activity"
+  const title = item.title?.toLowerCase() || ""
+
+  const platforms: Array<{ id: string; name: string; url: string; color: string }> = []
+
+  if (category === "hotel") {
+    platforms.push(
+      { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/hotels/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700" },
+      { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${query}&type=hotel`, color: "bg-[#f97316] hover:bg-[#ea580c]" },
+      { id: "agoda", name: "Agoda", url: `https://www.agoda.com/pages/agoda/default/DestinationSearchResult.aspx?city=${query}`, color: "bg-[#dd1f39] hover:bg-[#b71c1c]" },
+      { id: "booking", name: "Booking.com", url: `https://www.booking.com/search.html?ss=${query}`, color: "bg-[#003580] hover:bg-[#00224f]" }
+    )
+  } else if (category === "transport" && (title.includes("flight") || title.includes("penerbangan") || title.includes("pesawat") || title.includes("plane") || title.includes("bandara"))) {
+    platforms.push(
+      { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/flights/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700" },
+      { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${query}&type=flight`, color: "bg-[#f97316] hover:bg-[#ea580c]" }
+    )
+  } else if (category === "transport" && (title.includes("kereta") || title.includes("train") || title.includes("bus") || title.includes("sta") || title.includes("terminal"))) {
+    platforms.push(
+      { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/trains/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700" },
+      { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${query}&type=train`, color: "bg-[#f97316] hover:bg-[#ea580c]" }
+    )
+  } else if (category === "food") {
+    platforms.push(
+      { id: "booking", name: "Booking.com", url: `https://www.booking.com/search.html?ss=${query}&dest_type=city`, color: "bg-[#003580] hover:bg-[#00224f]" }
+    )
+  }
+
+  return platforms
+}
+
 // ─── Destination Card (from real data) ────────────────────
 function DestinationCard({ item, dayIndex, index, onSelect }: { item: ItineraryItem; dayIndex: number; index: number; onSelect: (item: ItineraryItem) => void }) {
   const type = destinationTypes[item.category] || destinationTypes.landmark
   const Icon = type.icon
+  const bookingPlatforms = getBookingPlatforms(item)
 
   return (
     <motion.div
@@ -88,6 +125,24 @@ function DestinationCard({ item, dayIndex, index, onSelect }: { item: ItineraryI
             )}
           </div>
           {item.notes && <p className="text-sm text-muted-foreground">{item.notes}</p>}
+
+          {/* Booking buttons - shown on hover */}
+          {bookingPlatforms.length > 0 && (
+            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex flex-wrap gap-2 mt-3">
+              {bookingPlatforms.map((platform) => (
+                <button
+                  key={platform.id}
+                  onClick={(e) => { e.stopPropagation(); window.open(platform.url, "_blank") }}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-white transition-all active:scale-95",
+                    platform.color
+                  )}
+                >
+                  <Ticket className="w-3 h-3" />{platform.name}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </motion.div>

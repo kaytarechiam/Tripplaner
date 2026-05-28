@@ -4,7 +4,7 @@ import {
   ChevronRight, Check, Lightbulb,
   Copy, RotateCcw, Utensils, TreePine, Camera,
   Star, ArrowLeft, Wand2, Users, Zap,
-  AlertCircle, Save, CloudSun, Navigation
+  AlertCircle, Save, CloudSun, Navigation, Ticket
 } from "lucide-react"
 import { Button } from "../components/ui/button"
 import { Badge } from "../components/ui/badge"
@@ -709,7 +709,54 @@ export function AIGeneratorPage({ navigateTo }: Props) {
                                   )}
                                 </div>
                               </div>
-                            )
+
+                              {/* Booking buttons */}
+                              {(() => {
+                                if (!item.location && !item.title) return null
+                                const query = encodeURIComponent(item.location || item.title)
+                                const cat = item.category?.split("/")[0] || "activity"
+                                const title = (item.title || "").toLowerCase()
+
+                                const platforms: Array<{ id: string; name: string; url: string; color: string }> = []
+
+                                if (cat === "hotel") {
+                                  platforms.push(
+                                    { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/hotels/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700" },
+                                    { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${query}&type=hotel`, color: "bg-[#f97316] hover:bg-[#ea580c]" },
+                                    { id: "agoda", name: "Agoda", url: `https://www.agoda.com/pages/agoda/default/DestinationSearchResult.aspx?city=${query}`, color: "bg-[#dd1f39] hover:bg-[#b71c1c]" },
+                                    { id: "booking", name: "Booking.com", url: `https://www.booking.com/search.html?ss=${query}`, color: "bg-[#003580] hover:bg-[#00224f]" }
+                                  )
+                                } else if (cat === "transport" && (title.includes("flight") || title.includes("penerbangan") || title.includes("pesawat"))) {
+                                  platforms.push(
+                                    { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/flights/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700" },
+                                    { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${query}&type=flight`, color: "bg-[#f97316] hover:bg-[#ea580c]" }
+                                  )
+                                } else if (cat === "transport" && (title.includes("kereta") || title.includes("train") || title.includes("bus"))) {
+                                  platforms.push(
+                                    { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/trains/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700" },
+                                    { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${query}&type=train`, color: "bg-[#f97316] hover:bg-[#ea580c]" }
+                                  )
+                                } else if (cat === "food") {
+                                  platforms.push(
+                                    { id: "booking", name: "Booking.com", url: `https://www.booking.com/search.html?ss=${query}&dest_type=city`, color: "bg-[#003580] hover:bg-[#00224f]" }
+                                  )
+                                }
+
+                                if (platforms.length === 0) return null
+                                return (
+                                  <div className="flex flex-wrap gap-1.5 mt-2">
+                                    {platforms.map(p => (
+                                      <button
+                                        key={p.id}
+                                        onClick={() => window.open(p.url, "_blank")}
+                                        className={cn("inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium text-white transition-all active:scale-95", p.color)}
+                                      >
+                                        <Ticket className="w-3 h-3" />{p.name}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )
+                              })()}
                           })}
                         </div>
                       </Card>

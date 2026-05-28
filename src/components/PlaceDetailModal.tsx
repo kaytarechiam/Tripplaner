@@ -1,7 +1,8 @@
 import {
   MapPin, Clock, Edit3, Trash2, ExternalLink,
   Utensils, TreePine, Camera, Landmark, ShoppingBag, Hotel, Navigation,
-  Loader2, Check
+  Loader2, Check, Ticket
+
 } from "lucide-react"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -63,6 +64,53 @@ export function PlaceDetailModal({ item, onClose, onDeleted }: PlaceDetailModalP
     }
   }
 
+  // Platform deep link config - based on category support
+  const getBookingPlatforms = () => {
+    if (!item.location && !item.title) return []
+    const query = encodeURIComponent(item.location || item.title)
+    const category = item.category?.toLowerCase() || "activity"
+    const title = item.title?.toLowerCase() || ""
+
+    const platforms: Array<{ id: string; name: string; url: string; color: string; icon: any }> = []
+
+    // Hotel - all platforms support
+    if (category === "hotel") {
+      platforms.push(
+        { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/hotels/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700", icon: Ticket },
+        { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${query}&type=hotel`, color: "bg-[#f97316] hover:bg-[#ea580c]", icon: Ticket },
+        { id: "agoda", name: "Agoda", url: `https://www.agoda.com/pages/agoda/default/DestinationSearchResult.aspx?city=${query}`, color: "bg-[#dd1f39] hover:bg-[#b71c1c]", icon: Ticket },
+        { id: "booking", name: "Booking.com", url: `https://www.booking.com/search.html?ss=${query}`, color: "bg-[#003580] hover:bg-[#00224f]", icon: Ticket }
+      )
+    }
+    // Flight
+    else if (category === "transport" && (title.includes("flight") || title.includes("penerbangan") || title.includes("pesawat") || title.includes("plane") || title.includes("bandara"))) {
+      platforms.push(
+        { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/flights/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700", icon: Ticket },
+        { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${query}&type=flight`, color: "bg-[#f97316] hover:bg-[#ea580c]", icon: Ticket }
+      )
+    }
+    // Train/Bus
+    else if (category === "transport" && (title.includes("kereta") || title.includes("train") || title.includes("bus") || title.includes("sta") || title.includes("terminal"))) {
+      platforms.push(
+        { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/trains/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700", icon: Ticket },
+        { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${query}&type=train`, color: "bg-[#f97316] hover:bg-[#ea580c]", icon: Ticket }
+      )
+    }
+    // Restaurant - Booking.com has some restaurant listings
+    else if (category === "food") {
+      platforms.push(
+        { id: "booking", name: "Booking.com", url: `https://www.booking.com/search.html?ss=${query}&dest_type=city`, color: "bg-[#003580] hover:bg-[#00224f]", icon: Ticket },
+        { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/restaurants/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700", icon: Ticket }
+      )
+    }
+    // Other categories (landmark, nature, activity, shopping) - no direct booking
+    // Return empty array, buttons won't be shown
+
+    return platforms
+  }
+
+  const bookingPlatforms = getBookingPlatforms()
+
   return (
     <Dialog open={!!item} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-md">
@@ -112,6 +160,32 @@ export function PlaceDetailModal({ item, onClose, onDeleted }: PlaceDetailModalP
             <div>
               <p className="text-sm font-medium mb-1">Deskripsi</p>
               <p className="text-sm text-muted-foreground">{item.description}</p>
+            </div>
+          )}
+
+          {/* Booking Platforms */}
+          {bookingPlatforms.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="h-px flex-1 bg-border" />
+                <span className="text-xs text-muted-foreground font-medium px-2">Pesan di</span>
+                <div className="h-px flex-1 bg-border" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {bookingPlatforms.map((platform) => (
+                  <button
+                    key={platform.id}
+                    onClick={() => window.open(platform.url, "_blank")}
+                    className={cn(
+                      "flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-white text-sm font-medium transition-all active:scale-95",
+                      platform.color
+                    )}
+                  >
+                    <Ticket className="w-4 h-4 shrink-0" />
+                    {platform.name}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
