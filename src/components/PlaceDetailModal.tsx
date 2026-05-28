@@ -1,7 +1,7 @@
 import {
   MapPin, Clock, Edit3, Trash2, ExternalLink,
   Utensils, TreePine, Camera, Landmark, ShoppingBag, Hotel, Navigation,
-  Loader2, Check
+  Loader2, Check, Ticket, Zap, TrendingUp
 } from "lucide-react"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -63,6 +63,30 @@ export function PlaceDetailModal({ item, onClose, onDeleted }: PlaceDetailModalP
     }
   }
 
+  const getBookingLinks = () => {
+    if (!item.location && !item.title) return null
+    const query = encodeURIComponent(item.location || item.title)
+    const searchQuery = encodeURIComponent(`${item.title} ${item.location || ''}`)
+    const isHotel = item.category === 'hotel'
+    const isFlight = item.title.toLowerCase().includes('flight') || item.title.toLowerCase().includes('plane') || item.title.toLowerCase().includes('penerbangan')
+
+    return {
+      traveloka: isFlight
+        ? `https://www.traveloka.com/en/flights/search?query=${query}`
+        : isHotel
+        ? `https://www.traveloka.com/en/hotels/search?query=${query}`
+        : `https://www.traveloka.com/en/flights/search?query=${query}`,
+      tiket: isFlight
+        ? `https://www.tiket.com/search?query=${query}&type=flight`
+        : isHotel
+        ? `https://www.tiket.com/search?query=${query}&type=hotel`
+        : `https://www.tiket.com/search?query=${query}`,
+      booking: `https://www.booking.com/search.html?ss=${query}`,
+    }
+  }
+
+  const bookingLinks = getBookingLinks()
+
   return (
     <Dialog open={!!item} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-md">
@@ -120,6 +144,81 @@ export function PlaceDetailModal({ item, onClose, onDeleted }: PlaceDetailModalP
             <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
               <p className="text-xs font-medium text-amber-600 mb-1">💡 Catatan AI</p>
               <p className="text-sm text-amber-700">{item.notes}</p>
+            </div>
+          )}
+
+          {/* Hotel Options */}
+          {bookingLinks && (
+            <div className="border border-border rounded-xl overflow-hidden">
+              <div className="bg-gradient-to-r from-blue-500/10 to-cyan-500/10 px-4 py-2.5 border-b border-border flex items-center gap-2">
+                <Zap className="w-4 h-4 text-blue-500" />
+                <span className="text-xs font-semibold text-blue-700 dark:text-blue-400">Pilih Opsi Penginapan</span>
+              </div>
+              <div className="divide-y divide-border">
+                {[
+                  { label: "Budget", icon: Hotel, price: "~Rp 150-350rb", tag: "⭐⭐", color: "text-green-400" },
+                  { label: "Mid-Range", icon: Hotel, price: "~Rp 350-800rb", tag: "⭐⭐⭐", color: "text-amber-400" },
+                  { label: "Premium", icon: Hotel, price: "~Rp 800rb+", tag: "⭐⭐⭐⭐⭐", color: "text-blue-400" },
+                ].map((opt) => {
+                  const q = encodeURIComponent(`${opt.label} hotel ${item.location || item.title}`)
+                  return (
+                    <button
+                      key={opt.label}
+                      className="w-full flex items-center justify-between px-4 py-3 hover:bg-secondary/60 transition-colors text-left"
+                      onClick={() => window.open(`https://www.traveloka.com/en/hotels/search?query=${q}`, "_blank")}
+                    >
+                      <div className="flex items-center gap-3">
+                        <opt.icon className="w-4 h-4 text-muted-foreground" />
+                        <div>
+                          <p className="text-sm font-medium">{opt.label}</p>
+                          <p className={`text-xs ${opt.color}`}>{opt.tag}</p>
+                        </div>
+                      </div>
+                      <div className="text-right flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">{opt.price}</span>
+                        <ExternalLink className="w-3.5 h-3.5 text-blue-500" />
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Booking Actions */}
+          {bookingLinks && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+                <TrendingUp className="w-3.5 h-3.5" /> Pesan Sekarang
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                  onClick={() => window.open(bookingLinks.traveloka, "_blank")}
+                >
+                  <Ticket className="w-4 h-4 mr-1" />
+                  Traveloka
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => window.open(bookingLinks.tiket, "_blank")}
+                >
+                  <Ticket className="w-4 h-4 mr-1" />
+                  Tiket.com
+                </Button>
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="w-full text-xs"
+                onClick={() => window.open(bookingLinks.booking, "_blank")}
+              >
+                <ExternalLink className="w-3.5 h-3.5 mr-1" />
+                Atau pesan via Booking.com
+              </Button>
             </div>
           )}
 

@@ -5,7 +5,8 @@ import {
   AlertTriangle, Sun, Cloud, CloudRain, Eye,
   Users, ArrowLeft, Search, Filter, Layers, Settings,
   Navigation, Trash2, Edit3, Copy, ExternalLink, Map as MapIcon2,
-  Loader2, X, Check, Map as MapIcon, Plane, Calendar, ChevronRight, PanelLeftClose, Sparkles
+  Loader2, X, Check, Map as MapIcon, Plane, Calendar, ChevronRight, PanelLeftClose, Sparkles,
+  Ticket
 } from "lucide-react"
 import { Button } from "../components/ui/button"
 import { Badge } from "../components/ui/badge"
@@ -41,6 +42,8 @@ function getWeatherEmoji(dayIndex: number): string { return [Sun, Cloud, CloudRa
 function DestinationCard({ item, dayIndex, index, onSelect }: { item: ItineraryItem; dayIndex: number; index: number; onSelect: (item: ItineraryItem) => void }) {
   const type = destinationTypes[item.category] || destinationTypes.landmark
   const Icon = type.icon
+  const bookingQuery = encodeURIComponent(item.location || item.title)
+  const isHotel = item.category === 'hotel'
 
   return (
     <motion.div
@@ -88,6 +91,21 @@ function DestinationCard({ item, dayIndex, index, onSelect }: { item: ItineraryI
             )}
           </div>
           {item.notes && <p className="text-sm text-muted-foreground">{item.notes}</p>}
+
+          <div className="opacity-0 group-hover:opacity-100 transition-opacity mt-2 flex gap-2">
+            <button
+              className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+              onClick={(e) => { e.stopPropagation(); window.open(`https://www.traveloka.com/en/${isHotel ? 'hotels' : 'flights'}/search?query=${bookingQuery}`, "_blank") }}
+            >
+              <Ticket className="w-3 h-3" /> Traveloka
+            </button>
+            <button
+              className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-[#f97316] hover:bg-[#ea580c] text-white transition-colors"
+              onClick={(e) => { e.stopPropagation(); window.open(`https://www.tiket.com/search?query=${bookingQuery}${isHotel ? '&type=hotel' : ''}`, "_blank") }}
+            >
+              <Ticket className="w-3 h-3" /> Tiket.com
+            </button>
+          </div>
         </div>
       </div>
     </motion.div>

@@ -4,7 +4,7 @@ import {
   ChevronRight, Check, Lightbulb,
   Copy, RotateCcw, Utensils, TreePine, Camera,
   Star, ArrowLeft, Wand2, Users, Zap,
-  AlertCircle, Save, CloudSun, Navigation
+  AlertCircle, Save, CloudSun, Navigation, Ticket, ExternalLink
 } from "lucide-react"
 import { Button } from "../components/ui/button"
 import { Badge } from "../components/ui/badge"
@@ -684,6 +684,8 @@ export function AIGeneratorPage({ navigateTo }: Props) {
                               transport: "from-gray-400 to-gray-500",
                             }
                             const catColor = catColorMap[cat] || "from-gray-400 to-gray-500"
+                            const bookingQuery = encodeURIComponent(`${item.location || item.title}`)
+                            const isHotelCategory = cat === 'hotel'
                             return (
                               <div key={i} className="relative flex items-start gap-4 pl-4">
                                 <div className={`absolute left-2 top-3 w-2.5 h-2.5 rounded-full bg-gradient-to-br ${catColor} shadow-lg z-10`} />
@@ -707,6 +709,20 @@ export function AIGeneratorPage({ navigateTo }: Props) {
                                   {item.tips && (
                                     <p className="text-xs text-muted-foreground/70 italic mt-1">💡 {item.tips}</p>
                                   )}
+                                  <div className="flex flex-wrap gap-2 mt-2">
+                                    <button
+                                      className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+                                      onClick={() => window.open(`https://www.traveloka.com/en/${isHotelCategory ? 'hotels' : 'flights'}/search?query=${bookingQuery}`, "_blank")}
+                                    >
+                                      <Ticket className="w-3 h-3" /> Pesan di Traveloka
+                                    </button>
+                                    <button
+                                      className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-[#f97316] hover:bg-[#ea580c] text-white transition-colors"
+                                      onClick={() => window.open(`https://www.tiket.com/search?query=${bookingQuery}${isHotelCategory ? '&type=hotel' : ''}`, "_blank")}
+                                    >
+                                      <Ticket className="w-3 h-3" /> Tiket.com
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
                             )
@@ -737,7 +753,7 @@ export function AIGeneratorPage({ navigateTo }: Props) {
                   </div>
 
                   <p className="text-xs text-center text-muted-foreground">
-                    ⚠️ Output dihasilkan AI. Harga bersifat estimasi.
+                    ⚠️ Output dihasilkan AI. Harga bersifat estimasi. Klik tombol biru/oranye untuk pesan langsung via Traveloka atau Tiket.com.
                   </p>
                 </motion.div>
               ) : (

@@ -33,4 +33,4 @@ node_modules/.vite/
 check-health.ps1
 
 # Supabase (if using CLI locally)
-.supabase/
+.supabase/.next/
