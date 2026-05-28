@@ -1,7 +1,7 @@
 import {
   MapPin, Clock, Edit3, Trash2, ExternalLink,
   Utensils, TreePine, Camera, Landmark, ShoppingBag, Hotel, Navigation,
-  Loader2, Check, Ticket
+  Loader2, Check, Ticket, TrendingDown, Star, Wifi, Car, Coffee, Shield
 
 } from "lucide-react"
 import {

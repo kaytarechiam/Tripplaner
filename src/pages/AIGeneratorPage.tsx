@@ -271,6 +271,39 @@ export function AIGeneratorPage({ navigateTo }: Props) {
     }, 0)
   , 0) ?? 0
 
+  // ─── Booking platforms helper ──────────────────────────
+  const getBookingPlatforms = (item: any) => {
+    if (!item.location && !item.title) return []
+    const query = encodeURIComponent(item.location || item.title)
+    const category = item.category?.toLowerCase() || "activity"
+    const title = item.title?.toLowerCase() || ""
+    const platforms: Array<{ id: string; name: string; url: string; color: string }> = []
+
+    if (category === "hotel") {
+      platforms.push(
+        { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/hotels/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700" },
+        { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${query}&type=hotel`, color: "bg-[#f97316] hover:bg-[#ea580c]" },
+        { id: "agoda", name: "Agoda", url: `https://www.agoda.com/pages/agoda/default/DestinationSearchResult.aspx?city=${query}`, color: "bg-[#dd1f39] hover:bg-[#b71c1c]" },
+        { id: "booking", name: "Booking.com", url: `https://www.booking.com/search.html?ss=${query}`, color: "bg-[#003580] hover:bg-[#00224f]" }
+      )
+    } else if (category === "transport" && (title.includes("flight") || title.includes("penerbangan") || title.includes("pesawat") || title.includes("plane") || title.includes("bandara"))) {
+      platforms.push(
+        { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/flights/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700" },
+        { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${query}&type=flight`, color: "bg-[#f97316] hover:bg-[#ea580c]" }
+      )
+    } else if (category === "transport" && (title.includes("kereta") || title.includes("train") || title.includes("bus"))) {
+      platforms.push(
+        { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/trains/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700" },
+        { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${query}&type=train`, color: "bg-[#f97316] hover:bg-[#ea580c]" }
+      )
+    } else if (category === "food") {
+      platforms.push(
+        { id: "booking", name: "Booking.com", url: `https://www.booking.com/search.html?ss=${query}&dest_type=city`, color: "bg-[#003580] hover:bg-[#00224f]" }
+      )
+    }
+    return platforms
+  }
+
   return (
     <div className="pt-16 min-h-screen">
 
@@ -707,86 +740,53 @@ export function AIGeneratorPage({ navigateTo }: Props) {
                                   {item.tips && (
                                     <p className="text-xs text-muted-foreground/70 italic mt-1">💡 {item.tips}</p>
                                   )}
+                                  {/* Booking buttons */}
+                                  {(() => {
+                                    if (!item.location && !item.title) return null
+                                    const query = encodeURIComponent(item.location || item.title)
+                                    const cat = item.category?.split("/")[0] || "activity"
+                                    const title = (item.title || "").toLowerCase()
+                                    const platforms: Array<{ id: string; name: string; url: string; color: string }> = []
+                                    if (cat === "hotel") {
+                                      platforms.push(
+                                        { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/hotels/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700" },
+                                        { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${query}&type=hotel`, color: "bg-[#f97316] hover:bg-[#ea580c]" },
+                                        { id: "agoda", name: "Agoda", url: `https://www.agoda.com/pages/agoda/default/DestinationSearchResult.aspx?city=${query}`, color: "bg-[#dd1f39] hover:bg-[#b71c1c]" },
+                                        { id: "booking", name: "Booking.com", url: `https://www.booking.com/search.html?ss=${query}`, color: "bg-[#003580] hover:bg-[#00224f]" }
+                                      )
+                                    } else if (cat === "transport" && (title.includes("flight") || title.includes("penerbangan") || title.includes("pesawat"))) {
+                                      platforms.push(
+                                        { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/flights/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700" },
+                                        { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${query}&type=flight`, color: "bg-[#f97316] hover:bg-[#ea580c]" }
+                                      )
+                                    } else if (cat === "transport" && (title.includes("kereta") || title.includes("train") || title.includes("bus"))) {
+                                      platforms.push(
+                                        { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/trains/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700" },
+                                        { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${query}&type=train`, color: "bg-[#f97316] hover:bg-[#ea580c]" }
+                                      )
+                                    } else if (cat === "food") {
+                                      platforms.push(
+                                        { id: "booking", name: "Booking.com", url: `https://www.booking.com/search.html?ss=${query}&dest_type=city`, color: "bg-[#003580] hover:bg-[#00224f]" }
+                                      )
+                                    }
+                                    if (platforms.length === 0) return null
+                                    return (
+                                      <div className="flex flex-wrap gap-1.5 mt-2">
+                                        {platforms.map(p => (
+                                          <button
+                                            key={p.id}
+                                            onClick={() => window.open(p.url, "_blank")}
+                                            className={cn("inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium text-white transition-all active:scale-95", p.color)}
+                                          >
+                                            <Ticket className="w-3 h-3" />{p.name}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )
+                                  })()}
                                 </div>
                               </div>
-
-                              {/* Booking buttons */}
-                              {(() => {
-                                if (!item.location && !item.title) return null
-                                const query = encodeURIComponent(item.location || item.title)
-                                const cat = item.category?.split("/")[0] || "activity"
-                                const title = (item.title || "").toLowerCase()
-
-                                const platforms: Array<{ id: string; name: string; url: string; color: string }> = []
-
-                                if (cat === "hotel") {
-                                  platforms.push(
-                                    { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/hotels/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700" },
-                                    { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${query}&type=hotel`, color: "bg-[#f97316] hover:bg-[#ea580c]" },
-                                    { id: "agoda", name: "Agoda", url: `https://www.agoda.com/pages/agoda/default/DestinationSearchResult.aspx?city=${query}`, color: "bg-[#dd1f39] hover:bg-[#b71c1c]" },
-                                    { id: "booking", name: "Booking.com", url: `https://www.booking.com/search.html?ss=${query}`, color: "bg-[#003580] hover:bg-[#00224f]" }
-                                  )
-                                } else if (cat === "transport" && (title.includes("flight") || title.includes("penerbangan") || title.includes("pesawat"))) {
-                                  platforms.push(
-                                    { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/flights/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700" },
-                                    { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${query}&type=flight`, color: "bg-[#f97316] hover:bg-[#ea580c]" }
-                                  )
-                                } else if (cat === "transport" && (title.includes("kereta") || title.includes("train") || title.includes("bus"))) {
-                                  platforms.push(
-                                    { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/trains/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700" },
-                                    { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${query}&type=train`, color: "bg-[#f97316] hover:bg-[#ea580c]" }
-                                  )
-                                } else if (cat === "food") {
-                                  platforms.push(
-                                    { id: "booking", name: "Booking.com", url: `https://www.booking.com/search.html?ss=${query}&dest_type=city`, color: "bg-[#003580] hover:bg-[#00224f]" }
-                                  )
-                                }
-
-                                if (platforms.length === 0) return null
-                                return (
-                                  <div className="flex flex-wrap gap-1.5 mt-2">
-                                    {platforms.map(p => (
-                                      <button
-                                        key={p.id}
-                                        onClick={() => window.open(p.url, "_blank")}
-                                        className={cn("inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium text-white transition-all active:scale-95", p.color)}
-                                      >
-                                        <Ticket className="w-3 h-3" />{p.name}
-                                      </button>
-                                    ))}
-                                  </div>
-                                )
-                              })()}
-                          })}
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
-
-                  {/* Save actions */}
-                  <div className="flex justify-center gap-3 pt-2">
-                    <Button variant="outline" onClick={handleReset}>
-                      <RotateCcw className="w-4 h-4 mr-2" />Generate Ulang
-                    </Button>
-                    {savedTripId ? (
-                      <Button variant="outline" onClick={() => navigateTo("editor")}>
-                        <Check className="w-4 h-4 mr-2" />Lihat di Editor
-                      </Button>
-                    ) : (
-                      <Button variant="gradient" size="lg" onClick={handleSave} disabled={isSaving}>
-                        {isSaving ? (
-                          <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Menyimpan...</>
-                        ) : (
-                          <><Save className="w-4 h-4 mr-2" />Simpan sebagai Trip</>
-                        )}
-                      </Button>
-                    )}
-                  </div>
-
-                  <p className="text-xs text-center text-muted-foreground">
-                    ⚠️ Output dihasilkan AI. Harga bersifat estimasi.
-                  </p>
-                </motion.div>
+                            )}
               ) : (
                 /* Empty state */
                 <motion.div

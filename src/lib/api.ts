@@ -260,3 +260,66 @@ export async function checkAPIHealth(): Promise<{
 }> {
   return apiFetch('/api/health')
 }
+
+// ─── Hotel / Flight Price Search ──────────────────────────
+
+export interface HotelOption {
+  id: string
+  name: string
+  provider: string
+  price: number
+  pricePerNight: number
+  currency: string
+  rating: number
+  stars: number
+  amenities: string[]
+  image: string
+  bookingUrl: string
+}
+
+export interface FlightOption {
+  id: string
+  airline: string
+  from: string
+  to: string
+  departureTime: string
+  arrivalTime: string
+  duration: string
+  price: number
+  currency: string
+  bookingUrl: string
+}
+
+export interface HotelSearchResponse {
+  query: string
+  category: string
+  results: HotelOption[]
+  currency: string
+  disclaimer: string
+}
+
+export interface FlightSearchResponse {
+  from: string
+  to: string
+  date?: string
+  results: FlightOption[]
+  currency: string
+  disclaimer: string
+}
+
+export async function searchHotels(
+  query: string,
+  category = "hotel"
+): Promise<HotelSearchResponse> {
+  return apiFetch<HotelSearchResponse>(`/api/hotels/search?query=${encodeURIComponent(query)}&category=${category}`)
+}
+
+export async function searchFlights(
+  from: string,
+  to: string,
+  date?: string
+): Promise<FlightSearchResponse> {
+  const params = new URLSearchParams({ from, to })
+  if (date) params.append("date", date)
+  return apiFetch<FlightSearchResponse>(`/api/hotels/flights?${params}`)
+}
