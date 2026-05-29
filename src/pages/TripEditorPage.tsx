@@ -5,8 +5,7 @@ import {
   AlertTriangle, Sun, Cloud, CloudRain, Eye,
   Users, ArrowLeft, Search, Filter, Layers, Settings,
   Navigation, Trash2, Edit3, Copy, ExternalLink, Map as MapIcon2,
-  Loader2, X, Check, Map as MapIcon, Plane, Calendar, ChevronRight, PanelLeftClose, Sparkles,
-  Ticket
+  Loader2, X, Check, Map as MapIcon, Plane, Calendar, ChevronRight, PanelLeftClose, Sparkles, Ticket
 } from "lucide-react"
 import { Button } from "../components/ui/button"
 import { Badge } from "../components/ui/badge"
