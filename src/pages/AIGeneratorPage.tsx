@@ -721,7 +721,9 @@ export function AIGeneratorPage({ navigateTo }: Props) {
                             // Build booking platform buttons based on category
                             const itemQuery = encodeURIComponent(item.location || item.title)
                             const itemCat = cat
+                            const itemTitle = item.title?.toLowerCase() || ""
                             const aiBookingPlatforms: Array<{name: string; url: string; color: string}> = []
+
                             if (itemCat === "hotel") {
                               aiBookingPlatforms.push(
                                 { name: "Traveloka", url: `https://www.traveloka.com/en/hotels/search?query=${itemQuery}`, color: "bg-blue-600 hover:bg-blue-700" },
@@ -729,15 +731,20 @@ export function AIGeneratorPage({ navigateTo }: Props) {
                                 { name: "Agoda", url: `https://www.agoda.com/pages/agoda/default/DestinationSearchResult.aspx?city=${itemQuery}`, color: "bg-[#dd1f39] hover:bg-[#b71c1c]" },
                                 { name: "Booking.com", url: `https://www.booking.com/search.html?ss=${itemQuery}`, color: "bg-[#003580] hover:bg-[#00224f]" }
                               )
-                            } else if (itemCat === "transport" && (item.title?.toLowerCase().includes("flight") || item.title?.toLowerCase().includes("pesawat"))) {
+                            } else if (itemCat === "transport" && (itemTitle.includes("flight") || itemTitle.includes("penerbangan") || itemTitle.includes("pesawat"))) {
                               aiBookingPlatforms.push(
                                 { name: "Traveloka", url: `https://www.traveloka.com/en/flights/search?query=${itemQuery}`, color: "bg-blue-600 hover:bg-blue-700" },
                                 { name: "Tiket.com", url: `https://www.tiket.com/search?query=${itemQuery}&type=flight`, color: "bg-[#f97316] hover:bg-[#ea580c]" }
                               )
-                            } else if (itemCat === "transport" && (item.title?.toLowerCase().includes("kereta") || item.title?.toLowerCase().includes("train"))) {
+                            } else if (itemCat === "transport" && (itemTitle.includes("kereta") || itemTitle.includes("train") || itemTitle.includes("bus"))) {
                               aiBookingPlatforms.push(
                                 { name: "Traveloka", url: `https://www.traveloka.com/en/trains/search?query=${itemQuery}`, color: "bg-blue-600 hover:bg-blue-700" },
                                 { name: "Tiket.com", url: `https://www.tiket.com/search?query=${itemQuery}&type=train`, color: "bg-[#f97316] hover:bg-[#ea580c]" }
+                              )
+                            } else if (itemCat === "food") {
+                              aiBookingPlatforms.push(
+                                { name: "Booking.com", url: `https://www.booking.com/search.html?ss=${itemQuery}&dest_type=city`, color: "bg-[#003580] hover:bg-[#00224f]" },
+                                { name: "Traveloka", url: `https://www.traveloka.com/en/flights/search?query=${itemQuery}`, color: "bg-blue-600 hover:bg-blue-700" }
                               )
                             }
 
