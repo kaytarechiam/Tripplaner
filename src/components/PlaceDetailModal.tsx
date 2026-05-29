@@ -1,8 +1,7 @@
 import {
   MapPin, Clock, Edit3, Trash2, ExternalLink,
   Utensils, TreePine, Camera, Landmark, ShoppingBag, Hotel, Navigation,
-  Loader2, Check, Ticket, TrendingDown, Star, Wifi, Car, Coffee, Shield, Search, RefreshCw
-
+  Loader2, Check, Ticket, TrendingUp, ChevronDown, Wifi, Coffee, Waves, Dumbbell
 } from "lucide-react"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -24,6 +23,51 @@ const categoryConfig: Record<string, { icon: typeof MapPin; label: string; color
   transport: { icon: Navigation, label: "Transport", color: "bg-gray-500/20 text-gray-400 border-gray-500/30" },
 }
 
+interface BookingPlatform {
+  id: string
+  name: string
+  url: string
+  color: string
+}
+
+interface PriceSource {
+  source: string
+  name: string
+  price: string
+  rating: number
+  stars: number
+  bookingUrl: string
+  platforms: BookingPlatform[]
+}
+
+interface PriceComparison {
+  item: string
+  category: string
+  sources: {
+    booking?: { results: any[]; isMock: boolean }
+    agoda?: { results: any[]; isMock: boolean }
+  }
+  isMockData: boolean
+  platforms: BookingPlatform[]
+}
+
+// Platform color mapping
+const platformColors: Record<string, { bg: string; text: string; border: string }> = {
+  traveloka: { bg: "bg-blue-600", text: "text-blue-400", border: "border-blue-500/30" },
+  tiket: { bg: "bg-[#f97316]", text: "text-orange-400", border: "border-orange-500/30" },
+  agoda: { bg: "bg-[#dd1f39]", text: "text-red-400", border: "border-red-500/30" },
+  booking: { bg: "bg-[#003580]", text: "text-blue-300", border: "border-blue-400/30" },
+}
+
+// Which platforms to show per category
+const categoryPlatforms: Record<string, string[]> = {
+  hotel: ["traveloka", "tiket", "agoda", "booking"],
+  transport_flight: ["traveloka", "tiket"],
+  transport_train: ["traveloka", "tiket"],
+  food: ["booking"],
+  // landmark, nature, activity, shopping → no booking platforms
+}
+
 interface PlaceDetailModalProps {
   item: ItineraryItem | null
   onClose: () => void
@@ -33,53 +77,75 @@ interface PlaceDetailModalProps {
 export function PlaceDetailModal({ item, onClose, onDeleted }: PlaceDetailModalProps) {
   const [deleting, setDeleting] = useState(false)
   const [deleted, setDeleted] = useState(false)
-  const [prices, setPrices] = useState<any[]>([])
-  const [pricesLoading, setPricesLoading] = useState(false)
-  const [pricesError, setPricesError] = useState<string | null>(null)
+  const [loadingPrices, setLoadingPrices] = useState(false)
+  const [priceComparison, setPriceComparison] = useState<PriceComparison | null>(null)
+  const [priceError, setPriceError] = useState<string | null>(null)
+  const [expandedTier, setExpandedTier] = useState<string | null>(null)
 
-  // Fetch real-time prices from RapidAPI when item changes
+  // Fetch price comparison when item changes
   useEffect(() => {
     if (!item) return
-
-    const category = item.category?.toLowerCase() || ""
-    const location = item.location || item.title || ""
-
-    // Only fetch for hotel category for now (RapidAPI hotel endpoint)
-    if (category === "hotel" && location) {
-      fetchHotelPrices(location)
-    } else {
-      setPrices([])
+    const cat = item.category?.toLowerCase() || "activity"
+    if (cat !== "hotel" && cat !== "transport") {
+      setPriceComparison(null)
+      return
     }
-  }, [item])
+    fetchPriceComparison()
+  }, [item?.id])
 
-  const fetchHotelPrices = async (location: string) => {
-    setPricesLoading(true)
-    setPricesError(null)
+  const fetchPriceComparison = async () => {
+    if (!item) return
+    setLoadingPrices(true)
+    setPriceError(null)
     try {
-      const res = await fetch(`/api/prices/hotel?location=${encodeURIComponent(location)}`)
-      const data = await res.json()
-      if (data.results && data.results.length > 0) {
-        setPrices(data.results.slice(0, 3))
-      } else {
-        setPricesError(data.error || "No prices found")
-      }
+      const res = await fetch(
+        `/api/booking/booking-compare?item=${encodeURIComponent(item.title + (item.location ? " " + item.location : ""))}&category=${item.category || "hotel"}`
+      )
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data: PriceComparison = await res.json()
+      setPriceComparison(data)
     } catch (err) {
-      setPricesError("Failed to fetch prices")
+      console.error("Failed to fetch price comparison:", err)
+      setPriceError("Gagal memuat data harga")
     } finally {
-      setPricesLoading(false)
+      setLoadingPrices(false)
     }
   }
 
-  if (!item) return null
+  // Get which platforms are available for current category
+  const getAvailablePlatforms = (): BookingPlatform[] => {
+    if (!item) return []
+    const cat = item.category?.toLowerCase() || "activity"
+    const title = item.title?.toLowerCase() || ""
 
-  const config = categoryConfig[item.category] || categoryConfig.landmark
-  const Icon = config.icon
+    if (cat === "hotel") return [
+      { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/hotels/search?query=${encodeURIComponent(item.location || item.title)}`, color: "#2563eb" },
+      { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${encodeURIComponent(item.location || item.title)}&type=hotel`, color: "#f97316" },
+      { id: "agoda", name: "Agoda", url: `https://www.agoda.com/search?locale=en-us&currency=IDR&pricenext=1&query=${encodeURIComponent(item.location || item.title)}`, color: "#dd1f39" },
+      { id: "booking", name: "Booking.com", url: `https://www.booking.com/search.html?ss=${encodeURIComponent(item.location || item.title)}`, color: "#003580" },
+    ]
+    if (cat === "transport" && (title.includes("flight") || title.includes("penerbangan") || title.includes("pesawat"))) {
+      return [
+        { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/flights/search?query=${encodeURIComponent(item.location || item.title)}`, color: "#2563eb" },
+        { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${encodeURIComponent(item.location || item.title)}&type=flight`, color: "#f97316" },
+      ]
+    }
+    if (cat === "transport" && (title.includes("kereta") || title.includes("train"))) {
+      return [
+        { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/trains/search?query=${encodeURIComponent(item.location || item.title)}`, color: "#2563eb" },
+        { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${encodeURIComponent(item.location || item.title)}&type=train`, color: "#f97316" },
+      ]
+    }
+    return []
+  }
+
+  const availablePlatforms = getAvailablePlatforms()
 
   const handleDelete = async () => {
     if (!item || deleting) return
     setDeleting(true)
     try {
-      await supabase!.from("itinerary_items").delete().eq("id", item.id)
+      await supabase?.from("itinerary_items").delete().eq("id", item.id)
       setDeleted(true)
       setTimeout(() => {
         onDeleted?.()
@@ -93,6 +159,7 @@ export function PlaceDetailModal({ item, onClose, onDeleted }: PlaceDetailModalP
   }
 
   const handleOpenMaps = () => {
+    if (!item) return
     if (item.latitude && item.longitude) {
       window.open(`https://www.google.com/maps?q=${item.latitude},${item.longitude}`, "_blank")
     } else if (item.location) {
@@ -100,56 +167,36 @@ export function PlaceDetailModal({ item, onClose, onDeleted }: PlaceDetailModalP
     }
   }
 
-  // Platform deep link config - based on category support
-  const getBookingPlatforms = () => {
-    if (!item.location && !item.title) return []
-    const query = encodeURIComponent(item.location || item.title)
-    const category = item.category?.toLowerCase() || "activity"
-    const title = item.title?.toLowerCase() || ""
-
-    const platforms: Array<{ id: string; name: string; url: string; color: string; icon: any }> = []
-
-    // Hotel - all platforms support
-    if (category === "hotel") {
-      platforms.push(
-        { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/hotels/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700", icon: Ticket },
-        { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${query}&type=hotel`, color: "bg-[#f97316] hover:bg-[#ea580c]", icon: Ticket },
-        { id: "agoda", name: "Agoda", url: `https://www.agoda.com/pages/agoda/default/DestinationSearchResult.aspx?city=${query}`, color: "bg-[#dd1f39] hover:bg-[#b71c1c]", icon: Ticket },
-        { id: "booking", name: "Booking.com", url: `https://www.booking.com/search.html?ss=${query}`, color: "bg-[#003580] hover:bg-[#00224f]", icon: Ticket }
-      )
-    }
-    // Flight
-    else if (category === "transport" && (title.includes("flight") || title.includes("penerbangan") || title.includes("pesawat") || title.includes("plane") || title.includes("bandara"))) {
-      platforms.push(
-        { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/flights/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700", icon: Ticket },
-        { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${query}&type=flight`, color: "bg-[#f97316] hover:bg-[#ea580c]", icon: Ticket }
-      )
-    }
-    // Train/Bus
-    else if (category === "transport" && (title.includes("kereta") || title.includes("train") || title.includes("bus") || title.includes("sta") || title.includes("terminal"))) {
-      platforms.push(
-        { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/trains/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700", icon: Ticket },
-        { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${query}&type=train`, color: "bg-[#f97316] hover:bg-[#ea580c]", icon: Ticket }
-      )
-    }
-    // Restaurant - Booking.com has some restaurant listings
-    else if (category === "food") {
-      platforms.push(
-        { id: "booking", name: "Booking.com", url: `https://www.booking.com/search.html?ss=${query}&dest_type=city`, color: "bg-[#003580] hover:bg-[#00224f]", icon: Ticket },
-        { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/restaurants/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700", icon: Ticket }
-      )
-    }
-    // Other categories (landmark, nature, activity, shopping) - no direct booking
-    // Return empty array, buttons won't be shown
-
-    return platforms
+  const platformBg: Record<string, string> = {
+    traveloka: "bg-blue-600 hover:bg-blue-700",
+    tiket: "bg-[#f97316] hover:bg-[#ea580c]",
+    agoda: "bg-[#dd1f39] hover:bg-[#b71c1c]",
+    booking: "bg-[#003580] hover:bg-[#00224f]",
   }
 
-  const bookingPlatforms = getBookingPlatforms()
+  const simpleUrls = availablePlatforms
+  const bookingResults = priceComparison?.sources?.booking?.results
+  const agodaResults = priceComparison?.sources?.agoda?.results
+  const hasRealPriceData = priceComparison && (
+    (bookingResults && bookingResults.length > 0 && !priceComparison?.sources?.booking?.isMock) ||
+    (agodaResults && agodaResults.length > 0 && !priceComparison?.sources?.agoda?.isMock)
+  )
+
+  if (!item) return null
+
+  const config = categoryConfig[item.category] || categoryConfig.landmark
+  const Icon = config.icon
+
+  const formatPrice = (price: number, currency = "IDR") => {
+    if (currency === "IDR") {
+      return `Rp ${price.toLocaleString("id-ID")}`
+    }
+    return `${currency} ${price.toLocaleString()}`
+  }
 
   return (
     <Dialog open={!!item} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -199,105 +246,189 @@ export function PlaceDetailModal({ item, onClose, onDeleted }: PlaceDetailModalP
             </div>
           )}
 
-          {/* Real-time Prices from RapidAPI */}
-          {(pricesLoading || prices.length > 0 || pricesError) && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <div className="h-px flex-1 bg-border" />
-                <span className="text-xs text-muted-foreground font-medium px-2">Harga Real-Time</span>
-                <div className="h-px flex-1 bg-border" />
-              </div>
-
-              {pricesLoading && (
-                <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  Mengambil harga dari Agoda...
-                </div>
-              )}
-
-              {pricesError && !pricesLoading && (
-                <div className="text-xs text-muted-foreground px-2">
-                  Harga tidak tersedia — koneksi API terbatas
-                </div>
-              )}
-
-              {prices.map((hotel, idx) => (
-                <div key={idx} className="border border-border rounded-xl overflow-hidden">
-                  {hotel.imageUrl && (
-                    <img src={hotel.imageUrl} alt={hotel.name} className="w-full h-24 object-cover" />
-                  )}
-                  <div className="p-3 space-y-1">
-                    <p className="text-sm font-medium leading-tight">{hotel.name}</p>
-                    <div className="flex items-center gap-2">
-                      {hotel.rating && (
-                        <span className="text-xs font-semibold text-amber-500">⭐ {hotel.rating}</span>
-                      )}
-                      {hotel.reviewCount > 0 && (
-                        <span className="text-xs text-muted-foreground">({hotel.reviewCount} review)</span>
-                      )}
-                    </div>
-                    {hotel.price && (
-                      <div className="flex items-center justify-between mt-1">
-                        <p className="text-sm font-bold text-emerald-600">
-                          {hotel.currency === "IDR" ? "Rp " : "$"}
-                          {typeof hotel.price === "number"
-                            ? hotel.price.toLocaleString()
-                            : hotel.price}
-                          <span className="text-xs font-normal text-muted-foreground">/malam</span>
-                        </p>
-                        <a
-                          href={hotel.bookingUrl || `https://www.agoda.com/pages/agoda/default/DestinationSearchResult.aspx?city=${encodeURIComponent(item.location || "")}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs px-2.5 py-1 rounded-lg bg-[#dd1f39] text-white font-medium hover:bg-[#b71c1c] transition-colors"
-                        >
-                          Agoda
-                        </a>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-
-              {!pricesLoading && prices.length === 0 && !pricesError && (
-                <div className="text-xs text-muted-foreground px-2">
-                  Harga real-time tidak tersedia untuk lokasi ini
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Booking Platforms */}
-          {bookingPlatforms.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <div className="h-px flex-1 bg-border" />
-                <span className="text-xs text-muted-foreground font-medium px-2">Pesan di</span>
-                <div className="h-px flex-1 bg-border" />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {bookingPlatforms.map((platform) => (
-                  <button
-                    key={platform.id}
-                    onClick={() => window.open(platform.url, "_blank")}
-                    className={cn(
-                      "flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-white text-sm font-medium transition-all active:scale-95",
-                      platform.color
-                    )}
-                  >
-                    <Ticket className="w-4 h-4 shrink-0" />
-                    {platform.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Notes / Tips */}
           {item.notes && (
             <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
-              <p className="text-xs font-medium text-amber-600 mb-1">💡 Catatan AI</p>
+              <p className="text-xs font-medium text-amber-600 mb-1">Catatan AI</p>
               <p className="text-sm text-amber-700">{item.notes}</p>
+            </div>
+          )}
+
+          {/* ── BOOKING SECTION ──────────────────────────────── */}
+          {availablePlatforms.length > 0 && (
+            <div className="border border-border rounded-xl overflow-hidden">
+              {/* Header */}
+              <div className="bg-gradient-to-r from-blue-500/10 to-cyan-500/10 px-4 py-2.5 border-b border-border flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-blue-500" />
+                <span className="text-xs font-semibold text-blue-700 dark:text-blue-400">
+                  {item.category === "hotel" ? "Cari & Bandingkan Harga" :
+                    item.category === "transport" ? "Pesan Transportasi" : "Pesan Sekarang"}
+                </span>
+                {priceComparison && priceComparison.isMockData && (
+                  <span className="ml-auto text-[10px] text-muted-foreground">estimasi</span>
+                )}
+                {hasRealPriceData && (
+                  <span className="ml-auto text-[10px] font-semibold text-green-600 dark:text-green-400">real-time</span>
+                )}
+              </div>
+
+              {/* Price comparison from API */}
+              {loadingPrices ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                  <span className="ml-2 text-sm text-muted-foreground">Memuat harga...</span>
+                </div>
+              ) : priceError ? (
+                <div className="p-4">
+                  <p className="text-xs text-muted-foreground mb-3">{priceError}</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {simpleUrls.map((p) => (
+                      <button
+                        key={p.id}
+                        className={cn(
+                          "flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-white text-sm font-medium transition-all active:scale-95",
+                          platformBg[p.id] || "bg-gray-600"
+                        )}
+                        onClick={() => window.open(p.url, "_blank")}
+                      >
+                        <Ticket className="w-4 h-4" />
+                        {p.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : hasRealPriceData ? (
+                /* Show real price results from RapidAPI */
+                <div className="divide-y divide-border">
+                  {/* Booking.com results */}
+                  {priceComparison!.sources?.booking?.results?.map((hotel: any, idx: number) => (
+                    <div key={`booking-${hotel.id || idx}`}>
+                      <button
+                        className="w-full flex items-center justify-between px-4 py-3 hover:bg-secondary/60 transition-colors text-left"
+                        onClick={() => setExpandedTier(expandedTier === `booking-${idx}` ? null : `booking-${idx}`)}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="flex gap-0.5 shrink-0">
+                            {[1, 2, 3, 4, 5].map((s) => (
+                              <span key={s} className={cn("text-xs", s <= (hotel.stars || 3) ? "text-amber-400" : "text-gray-600")}>★</span>
+                            ))}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">{hotel.name}</p>
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              Booking.com
+                              {hotel.rating && <span className="text-amber-500">★ {hotel.rating}</span>}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <div className="text-right">
+                            <p className="text-sm font-bold">{hotel.price}</p>
+                            <p className="text-xs text-muted-foreground">/malam</p>
+                          </div>
+                          <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", expandedTier === `booking-${idx}` && "rotate-180")} />
+                        </div>
+                      </button>
+
+                      {expandedTier === `booking-${idx}` && (
+                        <div className="px-4 pb-3 space-y-2">
+                          <p className="text-xs text-muted-foreground mb-2">Pesan via platform:</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            {simpleUrls.map((p) => (
+                              <button
+                                key={p.id}
+                                className={cn(
+                                  "flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-white text-sm font-medium transition-all active:scale-95",
+                                  platformBg[p.id] || "bg-gray-600"
+                                )}
+                                onClick={() => window.open(p.url, "_blank")}
+                              >
+                                <Ticket className="w-4 h-4" />
+                                {p.name}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+
+                  {/* Agoda results */}
+                  {priceComparison!.sources?.agoda?.results?.map((hotel: any, idx: number) => (
+                    <div key={`agoda-${hotel.id || idx}`}>
+                      <button
+                        className="w-full flex items-center justify-between px-4 py-3 hover:bg-secondary/60 transition-colors text-left"
+                        onClick={() => setExpandedTier(expandedTier === `agoda-${idx}` ? null : `agoda-${idx}`)}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="flex gap-0.5 shrink-0">
+                            {[1, 2, 3, 4, 5].map((s) => (
+                              <span key={s} className={cn("text-xs", s <= (hotel.stars || 3) ? "text-amber-400" : "text-gray-600")}>★</span>
+                            ))}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">{hotel.name}</p>
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              Agoda
+                              {hotel.rating && <span className="text-amber-500">★ {hotel.rating}</span>}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <div className="text-right">
+                            <p className="text-sm font-bold">{hotel.price || "~Rp 700.000"}</p>
+                            <p className="text-xs text-muted-foreground">/malam</p>
+                          </div>
+                          <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", expandedTier === `agoda-${idx}` && "rotate-180")} />
+                        </div>
+                      </button>
+
+                      {expandedTier === `agoda-${idx}` && (
+                        <div className="px-4 pb-3 space-y-2">
+                          <p className="text-xs text-muted-foreground mb-2">Pesan via platform:</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            {simpleUrls.map((p) => (
+                              <button
+                                key={p.id}
+                                className={cn(
+                                  "flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-white text-sm font-medium transition-all active:scale-95",
+                                  platformBg[p.id] || "bg-gray-600"
+                                )}
+                                onClick={() => window.open(p.url, "_blank")}
+                              >
+                                <Ticket className="w-4 h-4" />
+                                {p.name}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                /* No price data or mock only: show booking platform buttons directly */
+                <div className="p-4 space-y-2">
+                  <p className="text-xs text-muted-foreground mb-2">
+                    {priceComparison ? "Harga estimasi — pilih platform untuk pesan:" : "Pilih platform untuk pesan:"}
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {simpleUrls.map((p) => (
+                      <button
+                        key={p.id}
+                        className={cn(
+                          "flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-white text-sm font-medium transition-all active:scale-95",
+                          platformBg[p.id] || "bg-gray-600"
+                        )}
+                        onClick={() => window.open(p.url, "_blank")}
+                      >
+                        <Ticket className="w-4 h-4" />
+                        {p.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

@@ -283,7 +283,7 @@ export function AIGeneratorPage({ navigateTo }: Props) {
       platforms.push(
         { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/hotels/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700" },
         { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${query}&type=hotel`, color: "bg-[#f97316] hover:bg-[#ea580c]" },
-        { id: "agoda", name: "Agoda", url: `https://www.agoda.com/pages/agoda/default/DestinationSearchResult.aspx?city=${query}`, color: "bg-[#dd1f39] hover:bg-[#b71c1c]" },
+        { id: "agoda", name: "Agoda", url: `https://www.agoda.com/search?locale=en-us&currency=IDR&pricenext=1&query=${query}`, color: "bg-[#dd1f39] hover:bg-[#b71c1c]" },
         { id: "booking", name: "Booking.com", url: `https://www.booking.com/search.html?ss=${query}`, color: "bg-[#003580] hover:bg-[#00224f]" }
       )
     } else if (category === "transport" && (title.includes("flight") || title.includes("penerbangan") || title.includes("pesawat") || title.includes("plane") || title.includes("bandara"))) {
@@ -728,7 +728,7 @@ export function AIGeneratorPage({ navigateTo }: Props) {
                               aiBookingPlatforms.push(
                                 { name: "Traveloka", url: `https://www.traveloka.com/en/hotels/search?query=${itemQuery}`, color: "bg-blue-600 hover:bg-blue-700" },
                                 { name: "Tiket.com", url: `https://www.tiket.com/search?query=${itemQuery}&type=hotel`, color: "bg-[#f97316] hover:bg-[#ea580c]" },
-                                { name: "Agoda", url: `https://www.agoda.com/pages/agoda/default/DestinationSearchResult.aspx?city=${itemQuery}`, color: "bg-[#dd1f39] hover:bg-[#b71c1c]" },
+                                { name: "Agoda", url: `https://www.agoda.com/search?locale=en-us&currency=IDR&pricenext=1&query=${itemQuery}`, color: "bg-[#dd1f39] hover:bg-[#b71c1c]" },
                                 { name: "Booking.com", url: `https://www.booking.com/search.html?ss=${itemQuery}`, color: "bg-[#003580] hover:bg-[#00224f]" }
                               )
                             } else if (itemCat === "transport" && (itemTitle.includes("flight") || itemTitle.includes("penerbangan") || itemTitle.includes("pesawat"))) {

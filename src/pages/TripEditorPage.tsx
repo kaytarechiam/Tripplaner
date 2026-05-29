@@ -50,7 +50,7 @@ function getBookingPlatforms(item: ItineraryItem) {
     platforms.push(
       { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/hotels/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700" },
       { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${query}&type=hotel`, color: "bg-[#f97316] hover:bg-[#ea580c]" },
-      { id: "agoda", name: "Agoda", url: `https://www.agoda.com/pages/agoda/default/DestinationSearchResult.aspx?city=${query}`, color: "bg-[#dd1f39] hover:bg-[#b71c1c]" },
+      { id: "agoda", name: "Agoda", url: `https://www.agoda.com/search?locale=en-us&currency=IDR&pricenext=1&query=${query}`, color: "bg-[#dd1f39] hover:bg-[#b71c1c]" },
       { id: "booking", name: "Booking.com", url: `https://www.booking.com/search.html?ss=${query}`, color: "bg-[#003580] hover:bg-[#00224f]" }
     )
   } else if (category === "transport" && (title.includes("flight") || title.includes("penerbangan") || title.includes("pesawat") || title.includes("plane") || title.includes("bandara"))) {
@@ -58,14 +58,21 @@ function getBookingPlatforms(item: ItineraryItem) {
       { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/flights/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700" },
       { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${query}&type=flight`, color: "bg-[#f97316] hover:bg-[#ea580c]" }
     )
-  } else if (category === "transport" && (title.includes("kereta") || title.includes("train") || title.includes("bus") || title.includes("sta") || title.includes("terminal"))) {
+  } else if (category === "transport" && (title.includes("kereta") || title.includes("train") || title.includes("kereta api"))) {
     platforms.push(
       { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/trains/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700" },
       { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${query}&type=train`, color: "bg-[#f97316] hover:bg-[#ea580c]" }
     )
-  } else if (category === "food") {
+  } else if (category === "transport" && (title.includes("bus"))) {
     platforms.push(
-      { id: "booking", name: "Booking.com", url: `https://www.booking.com/search.html?ss=${query}&dest_type=city`, color: "bg-[#003580] hover:bg-[#00224f]" }
+      { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/buses/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700" },
+      { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${query}&type=bus`, color: "bg-[#f97316] hover:bg-[#ea580c]" }
+    )
+  } else if (category === "food") {
+    // Most platforms don't have restaurant booking; Booking.com has some restaurant reservations
+    platforms.push(
+      { id: "booking", name: "Booking.com", url: `https://www.booking.com/search.html?ss=${query}`, color: "bg-[#003580] hover:bg-[#00224f]" },
+      { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/flights/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700" }
     )
   }
 
