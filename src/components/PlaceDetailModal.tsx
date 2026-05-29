@@ -1,7 +1,7 @@
 import {
   MapPin, Clock, Edit3, Trash2, ExternalLink,
   Utensils, TreePine, Camera, Landmark, ShoppingBag, Hotel, Navigation,
-  Loader2, Check, Ticket, TrendingDown, Star, Wifi, Car, Coffee, Shield
+  Loader2, Check, Ticket, TrendingDown, Star, Wifi, Car, Coffee, Shield, Search, RefreshCw
 
 } from "lucide-react"
 import {
@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import type { ItineraryItem } from "@/lib/supabase"
 import { supabase } from "@/lib/supabase"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 
 const categoryConfig: Record<string, { icon: typeof MapPin; label: string; color: string }> = {
   hotel: { icon: Hotel, label: "Hotel", color: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
@@ -33,6 +33,42 @@ interface PlaceDetailModalProps {
 export function PlaceDetailModal({ item, onClose, onDeleted }: PlaceDetailModalProps) {
   const [deleting, setDeleting] = useState(false)
   const [deleted, setDeleted] = useState(false)
+  const [prices, setPrices] = useState<any[]>([])
+  const [pricesLoading, setPricesLoading] = useState(false)
+  const [pricesError, setPricesError] = useState<string | null>(null)
+
+  // Fetch real-time prices from RapidAPI when item changes
+  useEffect(() => {
+    if (!item) return
+
+    const category = item.category?.toLowerCase() || ""
+    const location = item.location || item.title || ""
+
+    // Only fetch for hotel category for now (RapidAPI hotel endpoint)
+    if (category === "hotel" && location) {
+      fetchHotelPrices(location)
+    } else {
+      setPrices([])
+    }
+  }, [item])
+
+  const fetchHotelPrices = async (location: string) => {
+    setPricesLoading(true)
+    setPricesError(null)
+    try {
+      const res = await fetch(`/api/prices/hotel?location=${encodeURIComponent(location)}`)
+      const data = await res.json()
+      if (data.results && data.results.length > 0) {
+        setPrices(data.results.slice(0, 3))
+      } else {
+        setPricesError(data.error || "No prices found")
+      }
+    } catch (err) {
+      setPricesError("Failed to fetch prices")
+    } finally {
+      setPricesLoading(false)
+    }
+  }
 
   if (!item) return null
 
@@ -160,6 +196,74 @@ export function PlaceDetailModal({ item, onClose, onDeleted }: PlaceDetailModalP
             <div>
               <p className="text-sm font-medium mb-1">Deskripsi</p>
               <p className="text-sm text-muted-foreground">{item.description}</p>
+            </div>
+          )}
+
+          {/* Real-time Prices from RapidAPI */}
+          {(pricesLoading || prices.length > 0 || pricesError) && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="h-px flex-1 bg-border" />
+                <span className="text-xs text-muted-foreground font-medium px-2">Harga Real-Time</span>
+                <div className="h-px flex-1 bg-border" />
+              </div>
+
+              {pricesLoading && (
+                <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  Mengambil harga dari Agoda...
+                </div>
+              )}
+
+              {pricesError && !pricesLoading && (
+                <div className="text-xs text-muted-foreground px-2">
+                  Harga tidak tersedia — koneksi API terbatas
+                </div>
+              )}
+
+              {prices.map((hotel, idx) => (
+                <div key={idx} className="border border-border rounded-xl overflow-hidden">
+                  {hotel.imageUrl && (
+                    <img src={hotel.imageUrl} alt={hotel.name} className="w-full h-24 object-cover" />
+                  )}
+                  <div className="p-3 space-y-1">
+                    <p className="text-sm font-medium leading-tight">{hotel.name}</p>
+                    <div className="flex items-center gap-2">
+                      {hotel.rating && (
+                        <span className="text-xs font-semibold text-amber-500">⭐ {hotel.rating}</span>
+                      )}
+                      {hotel.reviewCount > 0 && (
+                        <span className="text-xs text-muted-foreground">({hotel.reviewCount} review)</span>
+                      )}
+                    </div>
+                    {hotel.price && (
+                      <div className="flex items-center justify-between mt-1">
+                        <p className="text-sm font-bold text-emerald-600">
+                          {hotel.currency === "IDR" ? "Rp " : "$"}
+                          {typeof hotel.price === "number"
+                            ? hotel.price.toLocaleString()
+                            : hotel.price}
+                          <span className="text-xs font-normal text-muted-foreground">/malam</span>
+                        </p>
+                        <a
+                          href={hotel.bookingUrl || `https://www.agoda.com/pages/agoda/default/DestinationSearchResult.aspx?city=${encodeURIComponent(item.location || "")}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs px-2.5 py-1 rounded-lg bg-[#dd1f39] text-white font-medium hover:bg-[#b71c1c] transition-colors"
+                        >
+                          Agoda
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {!pricesLoading && prices.length === 0 && !pricesError && (
+                <div className="text-xs text-muted-foreground px-2">
+                  Harga real-time tidak tersedia untuk lokasi ini
+                </div>
+              )}
             </div>
           )}
 
