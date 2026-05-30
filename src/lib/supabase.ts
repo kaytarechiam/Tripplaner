@@ -306,12 +306,12 @@ export async function signInWithGoogle() {
   if (error) throw error
 }
 
-// Check if email already registered (heuristic: try signing in with wrong password)
+// Check if email already registered
+// Note: Supabase normalizes auth errors for security, so we let signUp handle duplicates
 export async function checkEmailExists(email: string): Promise<boolean> {
-  if (!supabase) return false
-  const { error } = await supabase.auth.signInWithPassword({ email, password: '__check_only__' })
-  if (!error) return true
-  return error.message !== 'Invalid login credentials' && !error.message.includes('not found')
+  // We cannot reliably check email existence without side effects.
+  // Return false so callers proceed to signUp, which returns the proper error.
+  return false
 }
 
 // Update password (requires current session)

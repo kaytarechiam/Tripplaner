@@ -534,6 +534,7 @@ export function LoginPage({ navigateTo, onLoginSuccess, supabaseConfigured }: Lo
   const [forgotEmail, setForgotEmail] = useState("")
   const [forgotLoading, setForgotLoading] = useState(false)
   const [forgotSuccess, setForgotSuccess] = useState(false)
+  const [forgotError, setForgotError] = useState("")
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -708,10 +709,13 @@ export function LoginPage({ navigateTo, onLoginSuccess, supabaseConfigured }: Lo
                 {forgotSuccess && (
                   <p className="text-xs text-green-500">Email reset dikirim! Cek inbox kamu.</p>
                 )}
+                {forgotError && (
+                  <p className="text-xs text-red-500">{forgotError}</p>
+                )}
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" className="flex-1"
                     type="button"
-                    onClick={() => { setShowForgotPassword(false); setForgotSuccess(false) }}>
+                    onClick={() => { setShowForgotPassword(false); setForgotSuccess(false); setForgotError("") }}>
                     Batal
                   </Button>
                   <Button variant="gradient" size="sm" className="flex-1"
@@ -725,7 +729,7 @@ export function LoginPage({ navigateTo, onLoginSuccess, supabaseConfigured }: Lo
                         await resetPasswordForEmail(forgotEmail)
                         setForgotSuccess(true)
                       } catch (err: any) {
-                        // silently fail
+                        setForgotError(err.message || 'Gagal mengirim email reset. Coba lagi.')
                       } finally {
                         setForgotLoading(false)
                       }
@@ -829,8 +833,9 @@ export function RegisterPage({ navigateTo, onLoginSuccess, supabaseConfigured }:
 
       const { data, error } = await signUp(email, password, name)
       if (error) {
-        if (error.message.includes("already registered")) {
-          setError("Email sudah terdaftar. Coba login.")
+        if (error.message?.toLowerCase().includes('already registered') ||
+            error.message?.toLowerCase().includes('already been registered')) {
+          setError('Email sudah terdaftar. Silakan masuk atau gunakan email lain.')
         } else {
           setError(error.message)
         }

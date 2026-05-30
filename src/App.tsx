@@ -96,11 +96,15 @@ function App() {
   useEffect(() => {
     if (!supabase) return
 
+    // Track whether we're in password recovery mode
+    let pendingPasswordRecovery = false
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       console.debug(`[TripPlanner] Auth event: ${event}`)
 
       if (event === "PASSWORD_RECOVERY") {
-        navigateTo("settings")
+        pendingPasswordRecovery = true
+        // Will navigate to settings when SIGNED_IN fires with the recovery session
       } else if (event === "SIGNED_IN" && session?.user) {
         const u = session.user
         setUser({
@@ -114,6 +118,10 @@ function App() {
             .toUpperCase()
             .slice(0, 2),
         })
+        if (pendingPasswordRecovery) {
+          pendingPasswordRecovery = false
+          navigateTo("settings")
+        }
         // ✅ JANGAN override page di sini — biarkan user di page yang mereka pilih
         // setCurrentPage("home") — DIHAPUS karena overwrite navigation user
       } else if (event === "SIGNED_OUT") {
