@@ -134,9 +134,12 @@ export async function createTrip(trip: Omit<Trip, 'id' | 'user_id' | 'created_at
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
 
+  // Map frontend field names → actual DB column names
+  // DB uses: owner_id (not user_id), title (not name — name is a generated column)
+  const { name, ...rest } = trip as any
   const { data, error } = await supabase
     .from('trips')
-    .insert({ ...trip, user_id: user.id })
+    .insert({ ...rest, title: name, owner_id: user.id })
     .select()
     .single()
 
@@ -151,8 +154,8 @@ export async function getItinerary(tripId: string) {
     .from('itinerary_items')
     .select('*')
     .eq('trip_id', tripId)
-    .order('day', { ascending: true })
-    .order('sort_order', { ascending: true })
+    .order('day_number', { ascending: true })  // DB column: day_number (not day)
+    .order('order', { ascending: true })        // DB column: order (not sort_order)
 
   if (error) throw error
   return data as ItineraryItem[]
@@ -161,9 +164,22 @@ export async function getItinerary(tripId: string) {
 // Add itinerary item
 export async function addItineraryItem(item: Omit<ItineraryItem, 'id' | 'created_at'>) {
   if (!supabase) throw new Error('Supabase not configured')
+
+  // Map frontend field names → actual DB column names
+  // DB uses: day_number, name, order, lat, lng
+  const { day, title, sort_order, latitude, longitude, ...rest } = item as any
+  const dbItem = {
+    ...rest,
+    day_number: day,
+    name: title,
+    order: sort_order ?? 0,
+    ...(latitude !== undefined && { lat: latitude }),
+    ...(longitude !== undefined && { lng: longitude }),
+  }
+
   const { data, error } = await supabase
     .from('itinerary_items')
-    .insert(item)
+    .insert(dbItem)
     .select()
     .single()
 
@@ -232,9 +248,19 @@ export async function addSplitBill(item: Omit<SplitBillItem, 'id' | 'created_at'
 // Update itinerary item
 export async function updateItineraryItem(id: string, updates: Partial<Omit<ItineraryItem, 'id' | 'trip_id' | 'created_at'>>) {
   if (!supabase) throw new Error('Supabase not configured')
+
+  // Map frontend field names → actual DB column names
+  const { day, title, sort_order, latitude, longitude, ...rest } = updates as any
+  const dbUpdates: Record<string, unknown> = { ...rest }
+  if (day !== undefined) dbUpdates.day_number = day
+  if (title !== undefined) dbUpdates.name = title
+  if (sort_order !== undefined) dbUpdates.order = sort_order
+  if (latitude !== undefined) dbUpdates.lat = latitude
+  if (longitude !== undefined) dbUpdates.lng = longitude
+
   const { data, error } = await supabase
     .from('itinerary_items')
-    .update({ ...updates, updated_at: new Date().toISOString() })
+    .update(dbUpdates)
     .eq('id', id)
     .select()
     .single()
@@ -255,9 +281,15 @@ export async function deleteItineraryItem(id: string) {
 // Update trip
 export async function updateTrip(id: string, updates: Partial<Omit<Trip, 'id' | 'user_id' | 'created_at'>>) {
   if (!supabase) throw new Error('Supabase not configured')
+
+  // Map frontend field names → actual DB column names
+  const { name, ...rest } = updates as any
+  const dbUpdates: Record<string, unknown> = { ...rest, updated_at: new Date().toISOString() }
+  if (name !== undefined) dbUpdates.title = name
+
   const { data, error } = await supabase
     .from('trips')
-    .update({ ...updates, updated_at: new Date().toISOString() })
+    .update(dbUpdates)
     .eq('id', id)
     .select()
     .single()
