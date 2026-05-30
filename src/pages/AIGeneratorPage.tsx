@@ -76,7 +76,14 @@ export function AIGeneratorPage({ navigateTo }: Props) {
   const [weather, setWeather] = useState<any[]>([])
   const [city, setCity] = useState("")
   const [selectedPlace, setSelectedPlace] = useState<PlaceSuggestion | null>(null)
-  const [duration, setDuration] = useState(2)
+  const [startDate, setStartDate] = useState("")
+  const [endDate, setEndDate] = useState("")
+
+  // Derived: number of days
+  const duration = startDate && endDate
+    ? Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1)
+    : 2
+
   const [people, setPeople] = useState(2)
   // Budget: dual-thumb range
   const [minBudget, setMinBudget] = useState(BUDGET_MIN)
@@ -132,7 +139,8 @@ export function AIGeneratorPage({ navigateTo }: Props) {
     setWeather([])
     setCity("")
     setSelectedPlace(null)
-    setDuration(2)
+    setStartDate("")
+    setEndDate("")
     setPeople(2)
     setMinBudget(BUDGET_MIN)
     setMaxBudget(BUDGET_MAX)
@@ -148,6 +156,10 @@ export function AIGeneratorPage({ navigateTo }: Props) {
   const handleGenerate = async () => {
     if (!city.trim()) {
       setError("Kota tujuan wajib diisi.")
+      return
+    }
+    if (!startDate) {
+      setError("Pilih tanggal mulai trip.")
       return
     }
 
@@ -173,6 +185,7 @@ export function AIGeneratorPage({ navigateTo }: Props) {
         customMessage,
         minBudget,
         maxBudget,
+        start_date: startDate,
       })
 
       setProgress(70)
@@ -355,25 +368,36 @@ export function AIGeneratorPage({ navigateTo }: Props) {
                 </div>
               </div>
 
-              {/* Duration */}
+              {/* Date Range */}
               <div className="space-y-2">
-                <Label>Durasi Trip</Label>
-                <div className="flex gap-2">
-                  {[1, 2, 3, 4, 5, 6, 7].map(d => (
-                    <button
-                      key={d}
-                      onClick={() => setDuration(d)}
-                      className={cn(
-                        "flex-1 py-2 rounded-xl text-sm font-medium transition-all",
-                        duration === d
-                          ? "bg-gradient-to-br from-[var(--aurora-start)] to-[var(--aurora-end)] text-white shadow-md"
-                          : "bg-secondary hover:bg-secondary/80"
-                      )}
-                    >
-                      {d}d
-                    </button>
-                  ))}
+                <Label className="text-sm font-semibold">Tanggal Trip</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Mulai</Label>
+                    <Input
+                      type="date"
+                      value={startDate}
+                      min={new Date().toISOString().split('T')[0]}
+                      onChange={e => setStartDate(e.target.value)}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Selesai</Label>
+                    <Input
+                      type="date"
+                      value={endDate}
+                      min={startDate || new Date().toISOString().split('T')[0]}
+                      onChange={e => setEndDate(e.target.value)}
+                      className="mt-1"
+                    />
+                  </div>
                 </div>
+                {duration > 0 && startDate && endDate && (
+                  <p className="text-xs text-muted-foreground">
+                    📅 {duration} hari perjalanan
+                  </p>
+                )}
               </div>
 
               {/* People */}
@@ -693,7 +717,18 @@ export function AIGeneratorPage({ navigateTo }: Props) {
                               {day.day}
                             </div>
                             <div>
-                              <p className="font-bold">Hari {day.day}</p>
+                              <p className="font-bold flex items-center gap-2">
+                                Hari {day.day}
+                                {weather && weather[day.day - 1] && (
+                                  <span className="ml-1 text-sm text-muted-foreground flex items-center gap-1 font-normal">
+                                    {getWeatherIcon(weather[day.day - 1].weather_code)}
+                                    {weather[day.day - 1].temp_max}°/{weather[day.day - 1].temp_min}°C
+                                    {weather[day.day - 1].precipitation_probability > 50 && (
+                                      <span className="text-xs text-blue-400">💧{weather[day.day - 1].precipitation_probability}%</span>
+                                    )}
+                                  </span>
+                                )}
+                              </p>
                               <p className="text-sm text-muted-foreground">{day.date || "Tanggal TBD"}</p>
                             </div>
                           </div>
@@ -725,11 +760,13 @@ export function AIGeneratorPage({ navigateTo }: Props) {
                             const aiBookingPlatforms: Array<{name: string; url: string; color: string}> = []
 
                             if (itemCat === "hotel") {
+                              const ci = startDate
+                              const co = endDate
                               aiBookingPlatforms.push(
-                                { name: "Traveloka", url: `https://www.traveloka.com/en/hotels/search?query=${itemQuery}`, color: "bg-blue-600 hover:bg-blue-700" },
-                                { name: "Tiket.com", url: `https://www.tiket.com/search?query=${itemQuery}&type=hotel`, color: "bg-[#f97316] hover:bg-[#ea580c]" },
-                                { name: "Agoda", url: `https://www.agoda.com/search?locale=en-us&currency=IDR&pricenext=1&query=${itemQuery}`, color: "bg-[#dd1f39] hover:bg-[#b71c1c]" },
-                                { name: "Booking.com", url: `https://www.booking.com/search.html?ss=${itemQuery}`, color: "bg-[#003580] hover:bg-[#00224f]" }
+                                { name: "Traveloka", url: `https://www.traveloka.com/en-id/hotel?search=${itemQuery}${ci ? `&checkInDate=${ci.replace(/-/g,'')}&checkOutDate=${co.replace(/-/g,'')}` : ''}`, color: "bg-blue-600 hover:bg-blue-700" },
+                                { name: "Tiket.com", url: `https://www.tiket.com/hotel?q=${itemQuery}${ci ? `&checkIn=${ci}&checkOut=${co}` : ''}`, color: "bg-[#f97316] hover:bg-[#ea580c]" },
+                                { name: "Agoda", url: `https://www.agoda.com/search?city=${itemQuery}${ci ? `&checkIn=${ci}` : ''}`, color: "bg-[#dd1f39] hover:bg-[#b71c1c]" },
+                                { name: "Booking.com", url: `https://www.booking.com/searchresults.html?ss=${itemQuery}${ci ? `&checkin=${ci}&checkout=${co}` : ''}`, color: "bg-[#003580] hover:bg-[#00224f]" }
                               )
                             } else if (itemCat === "transport" && (itemTitle.includes("flight") || itemTitle.includes("penerbangan") || itemTitle.includes("pesawat"))) {
                               aiBookingPlatforms.push(
