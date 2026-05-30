@@ -1,284 +1,298 @@
-# TripPlanner
+# TripPlanner 🗺️
 
-Plan together, travel smarter.
+> Plan together, travel smarter.
 
-## Tech Stack
+---
 
-| Layer | Tech |
-|-------|------|
-| Frontend | React + Vite + TailwindCSS + Framer Motion |
-| Backend | Express.js + TypeScript |
-| Database | Supabase (PostgreSQL + Auth + Realtime) |
-| AI | Google Gemini 2.5 Flash |
-| Maps | Leaflet + OpenStreetMap |
-| Weather | Open-Meteo API (free, no key needed) |
-| Search | OSM Nominatim (free, no key needed) |
+## ⚡ Quick Start — Setelah Restart Laptop
 
-## Prerequisites
-
-- **Node.js** 18+
-- **npm** 9+
-- **Supabase project** (free tier ok)
-- **Google Gemini API key** ([get from Google AI Studio](https://aistudio.google.com/apikey))
-
-## Setup
-
-### 1. Clone & Install
+### 1. Buka terminal di folder project
 
 ```bash
-git clone https://github.com/kaytarechiam/Tripplaner.git
-cd Tripplaner
-npm install
+cd D:\Tripplaner
 ```
 
-### 2. Supabase Setup
-
-1. Buat project di [supabase.com](https://supabase.com)
-2. Buka **SQL Editor** dan jalankan schema ini:
-
-```sql
--- Profiles
-CREATE TABLE IF NOT EXISTS public.profiles (
-  id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
-  full_name TEXT,
-  username TEXT UNIQUE,
-  avatar_url TEXT,
-  bio TEXT,
-  countries_visited INTEGER DEFAULT 0,
-  trips_completed INTEGER DEFAULT 0,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Trips
-CREATE TABLE IF NOT EXISTS public.trips (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  name TEXT NOT NULL,
-  destination TEXT NOT NULL,
-  start_date DATE,
-  end_date DATE,
-  status TEXT DEFAULT 'planning' CHECK (status IN ('planning', 'active', 'completed')),
-  cover_image TEXT,
-  collaborators UUID[],
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Itinerary Items
-CREATE TABLE IF NOT EXISTS public.itinerary_items (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  trip_id UUID REFERENCES public.trips(id) ON DELETE CASCADE NOT NULL,
-  day INTEGER NOT NULL,
-  time TIME NOT NULL,
-  title TEXT NOT NULL,
-  description TEXT,
-  location TEXT,
-  latitude NUMERIC,
-  longitude NUMERIC,
-  category TEXT DEFAULT 'activity' CHECK (category IN ('hotel','landmark','food','nature','activity','shopping','transport')),
-  duration_minutes INTEGER DEFAULT 60,
-  notes TEXT,
-  estimated_cost NUMERIC,
-  sort_order INTEGER DEFAULT 0,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Bucket List
-CREATE TABLE IF NOT EXISTS public.bucket_list (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  place_name TEXT NOT NULL,
-  country TEXT NOT NULL,
-  priority TEXT DEFAULT 'medium' CHECK (priority IN ('low','medium','high')),
-  notes TEXT,
-  image_url TEXT,
-  latitude NUMERIC,
-  longitude NUMERIC,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Split Bills
-CREATE TABLE IF NOT EXISTS public.split_bills (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  trip_id UUID REFERENCES public.trips(id) ON DELETE CASCADE NOT NULL,
-  description TEXT NOT NULL,
-  amount NUMERIC NOT NULL,
-  currency TEXT DEFAULT 'IDR',
-  paid_by TEXT NOT NULL,
-  split_between TEXT[] NOT NULL,
-  settled BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Notifications
-CREATE TABLE IF NOT EXISTS public.notifications (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  type TEXT NOT NULL,
-  title TEXT NOT NULL,
-  body TEXT,
-  link TEXT,
-  read BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Public Trips
-CREATE TABLE IF NOT EXISTS public.public_trips (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  trip_id UUID REFERENCES public.trips(id) ON DELETE CASCADE NOT NULL,
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  likes INTEGER DEFAULT 0,
-  views INTEGER DEFAULT 0,
-  is_public BOOLEAN DEFAULT TRUE,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Enable RLS
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.trips ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.itinerary_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.bucket_list ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.split_bills ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.public_trips ENABLE ROW LEVEL SECURITY;
-
--- RLS Policies
-CREATE POLICY "Users manage own trips" ON public.trips FOR ALL USING (auth.uid() = user_id);
-CREATE POLICY "Users manage own itinerary" ON public.itinerary_items FOR ALL
-  USING (EXISTS (SELECT 1 FROM public.trips WHERE id = trip_id AND user_id = auth.uid()));
-CREATE POLICY "Users manage own bucket list" ON public.bucket_list FOR ALL USING (auth.uid() = user_id);
-CREATE POLICY "Users manage own split bills" ON public.split_bills FOR ALL
-  USING (EXISTS (SELECT 1 FROM public.trips WHERE id = trip_id AND user_id = auth.uid()));
-CREATE POLICY "Users manage own notifications" ON public.notifications FOR ALL USING (auth.uid() = user_id);
-
--- Auto-create profile on signup
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
-BEGIN
-  INSERT INTO public.profiles (id, full_name)
-  VALUES (NEW.id, NEW.raw_user_meta_data->>'full_name')
-  ON CONFLICT (id) DO NOTHING;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
-CREATE OR REPLACE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
-
--- Realtime
-ALTER PUBLICATION supabase_realtime ADD TABLE public.trips;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.itinerary_items;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
-```
-
-### 3. Environment Variables
-
-Copy `.env.example` ke `.env` dan `.env` di folder `server/`:
+### 2. Jalankan development server (frontend + backend sekaligus)
 
 ```bash
-cp .env.example .env
-cp .env.example server/.env
-```
-
-Isi variabel yang dibutuhkan:
-
-**`.env** (frontend):
-```env
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key
-VITE_API_BASE=http://localhost:3001
-```
-
-**`server/.env`** (backend):
-```env
-PORT=3001
-FRONTEND_URL=http://localhost:5173
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your-anon-key
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-GEMINI_API_KEY=your-gemini-api-key
-```
-
-### 4. Run
-
-```bash
-# Development (frontend + backend concurrently)
 npm run dev
-
-# Frontend saja
-npm run dev:client
-
-# Backend saja
-npm run dev:server
-
-# Production build
-npm run build
 ```
 
-Buka:
-- **Frontend**: http://localhost:5173
-- **Backend API**: http://localhost:3001
-- **Health check**: http://localhost:3001/api/health
+Ini akan menjalankan dua proses sekaligus:
 
-## Project Structure
+| Proses | URL | Keterangan |
+|--------|-----|------------|
+| Frontend (Vite) | http://localhost:5173 | React app |
+| Backend (Express) | http://localhost:3000 | API server |
 
-```
-src/
-├── pages/
-│   ├── Dashboard.tsx         # Dashboard utama + statistik
-│   ├── TripEditorPage.tsx   # Editor itinerary + peta
-│   ├── AIGeneratorPage.tsx  # AI itinerary generator
-│   ├── BucketList.tsx        # Wishlist destinasi
-│   ├── Explore.tsx          # Browse trip publik
-│   ├── Profile.tsx          # Profil user
-│   ├── Achievements.tsx      # Badge & XP
-│   ├── Notifications.tsx      # Notifikasi
-│   ├── Settings.tsx          # Pengaturan akun
-│   ├── SplitBillPage.tsx     # Kalkulator split bill
-│   └── AuthPage.tsx         # Login / Register / Landing
-├── components/
-│   ├── TripMap.tsx          # Peta interaktif dengan garis arah
-│   └── ui/                  # UI primitives (button, card, badge, dll)
-└── lib/
-    ├── api.ts               # API client (Supabase + backend)
-    └── supabase.ts           # Supabase helpers & types
+### 3. Verifikasi sistem berjalan
 
-server/
-├── routes/
-│   ├── ai.ts               # AI generate itinerary + recommendations
-│   ├── destinations.ts      # Place search (Nominatim) + destination info
-│   ├── weather.ts           # Weather (Open-Meteo API)
-│   └── split-bill.ts       # Split bill calculator + email preview
-├── services/
-│   ├── gemini.ts           # Gemini AI service
-│   └── supabase.ts          # Server-side Supabase helpers
-└── index.ts                # Express server entry
+```bash
+curl http://localhost:3000/api/health
 ```
 
-## Fitur
+Response yang diharapkan:
+```json
+{
+  "status": "ok",
+  "services": {
+    "supabase": true,
+    "gemini": true,
+    "openai_fallback": true,
+    "resend": true
+  }
+}
+```
 
-- **AI Itinerary Generator** — generate rencana trip otomatis berdasarkan preferensi
-- **Interactive Map** — garis arah antar destinasi seperti Google Maps
-- **Trip Editor** — atur itinerary per hari dengan drag-drop (Coming soon)
-- **Bucket List** — wishlist destinasi impian
-- **Split Bill** — kalkulasi dan bagi tagihan travel
-- **Weather Forecast** — cuaca destinasi dari Open-Meteo
-- **Place Autocomplete** — cari kota dari OpenStreetMap
-- **Notifications** — real-time dari Supabase Realtime
+### 4. Buka browser
 
-## API Keys Gratis
+**http://localhost:5173**
 
-| Service | Key Required | Free Tier |
-|---------|-------------|-----------|
-| Supabase | Ya | ✅ PostgreSQL + Auth + Realtime |
-| Gemini AI | Ya | ✅ 1.5M tokens/bulan |
-| Open-Meteo | Tidak | ✅ Unlimited |
-| OSM Nominatim | Tidak | ✅ Fair use policy |
-| OpenStreetMap | Tidak | ✅ Free |
-| Leaflet | Tidak | ✅ Free |
+---
 
-## License
+## 🌐 Jika Pakai Cloudflare Tunnel (Public Access)
 
-MIT
+`VITE_API_BASE` di `.env` mengarah ke `https://tripplaner.stei.cloud`.
+Jika tunnel tidak aktif, frontend tidak bisa reach backend.
+
+**Urutan startup lengkap:**
+1. Terminal 1 → `npm run dev`
+2. Terminal 2 → `cloudflared tunnel run tripplaner`
+3. Buka `https://tripplaner.stei.cloud`
+
+**Kalau mau dev lokal saja (tanpa tunnel):**
+1. Edit `.env` → ganti `VITE_API_BASE=http://localhost:3000`
+2. `npm run dev`
+3. Buka `http://localhost:5173`
+
+---
+
+## 🔑 Environment Variables (`.env`)
+
+File `.env` ada di root project. **Jangan di-commit ke git.**
+
+```env
+# ── Supabase ──────────────────────────────────────────
+VITE_SUPABASE_URL=https://thclaopauazckmlclsea.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJ...
+SUPABASE_URL=https://thclaopauazckmlclsea.supabase.co
+SUPABASE_ANON_KEY=eyJ...
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
+
+# ── API Server (frontend → backend) ──────────────────
+VITE_API_BASE=https://tripplaner.stei.cloud   # production/tunnel
+# VITE_API_BASE=http://localhost:3000         # dev lokal murni
+
+# ── AI ────────────────────────────────────────────────
+GEMINI_API_KEY=AQ.Ab8...        # Primary AI (Google Gemini)
+OPENAI_API_KEY=sk-proj-...      # Fallback AI (GPT-4o-mini)
+
+# ── Email ─────────────────────────────────────────────
+RESEND_API_KEY=re_...
+
+# ── RapidAPI (booking data) ───────────────────────────
+RAPIDAPI_KEY=cb8d732d...
+```
+
+---
+
+## 🛠️ Scripts
+
+| Command | Fungsi |
+|---------|--------|
+| `npm run dev` | **[UTAMA]** Jalankan frontend + backend bersamaan |
+| `npm run dev:client` | Frontend saja (Vite, port 5173) |
+| `npm run dev:server` | Backend saja (Express, port 3000) |
+| `npm run build` | Build TypeScript + Vite untuk production |
+| `npm run start` | Jalankan production build (butuh `npm run build` dulu) |
+
+---
+
+## 📁 Struktur Project
+
+```
+D:\Tripplaner\
+├── src/                       # Frontend React + TypeScript
+│   ├── pages/
+│   │   ├── AuthPage.tsx          # Login, Register, Forgot Password, Google OAuth
+│   │   ├── Dashboard.tsx         # Home dashboard
+│   │   ├── TripEditorPage.tsx    # Editor trip + AI panel ("✨ Generate dengan AI")
+│   │   ├── AIGeneratorPage.tsx   # Generator itinerary AI (date pickers + weather)
+│   │   ├── Explore.tsx           # Jelajahi trip publik
+│   │   ├── BucketList.tsx        # Trip Saya (my trips + saved from Explore)
+│   │   ├── Settings.tsx          # Profil + password + avatar upload
+│   │   └── SplitBillPage.tsx     # Split tagihan + kirim email via Resend
+│   ├── components/
+│   │   └── TripDetailModal.tsx   # Modal detail trip Explore (itinerary + komentar)
+│   └── lib/
+│       ├── supabase.ts           # DB helpers + auth helpers
+│       └── api.ts                # Frontend → Backend API calls
+│
+├── server/                    # Backend Express + TypeScript
+│   ├── index.ts                  # Entry point, PORT 3000
+│   ├── routes/
+│   │   ├── ai.ts                 # POST /api/ai/generate
+│   │   ├── weather.ts            # GET  /api/weather
+│   │   ├── split-bill.ts         # POST /api/split-bill/send-email
+│   │   ├── hotels.ts             # GET  /api/hotels
+│   │   └── booking.ts            # GET  /api/booking
+│   └── services/
+│       ├── gemini.ts             # Primary AI (Google Gemini)
+│       ├── openai.ts             # Fallback AI (GPT-4o-mini)
+│       ├── resend.ts             # Email via Resend
+│       └── supabase.ts           # Server-side Supabase client
+│
+├── supabase/migrations/       # SQL migrations (sudah diapply ke DB)
+├── .env                       # API keys (JANGAN commit!)
+├── package.json
+└── README.md                  # ← Kamu di sini
+```
+
+---
+
+## 🗄️ Database (Supabase)
+
+**Project ID:** `thclaopauazckmlclsea`
+**Dashboard:** https://supabase.com/dashboard/project/thclaopauazckmlclsea
+
+### Tabel
+
+| Tabel | Kolom penting | Fungsi |
+|-------|---------------|--------|
+| `trips` | `owner_id`, `title`, `destination`, `status` | Trip buatan user |
+| `itinerary_items` | `trip_id`, `day_number`, `name`, `lat`, `lng`, `order` | Item per hari |
+| `profiles` | `id` (= auth.users.id), `name`, `avatar_url`, `bio` | Profil user |
+| `saved_trips` | `user_id`, `original_trip_id`, `name`, `days`, `tags` | Copy dari Explore |
+| `trip_comments` | `trip_id`, `user_id`, `author_name`, `content` | Komentar Explore |
+| `trip_members` | `trip_id`, `name`, `email` | Anggota trip |
+| `split_bills` | `trip_id`, `description`, `amount`, `paid_by`, `split_between` | Tagihan |
+
+> ⚠️ **Perhatian kolom DB** (berbeda dari nama TypeScript di beberapa tempat):
+> - `trips.owner_id` bukan `user_id`
+> - `trips.title` bukan `name` (tapi ada generated column `name`)
+> - `itinerary_items.day_number` bukan `day`
+> - `profiles.id` = auth.users.id (bukan kolom `user_id` terpisah)
+
+---
+
+## 🤖 API Endpoints
+
+### `POST /api/ai/generate` — Generate Itinerary
+```json
+{
+  "destination": "Bali",
+  "days": 3,
+  "travelers": 2,
+  "start_date": "2026-06-15",
+  "budget": "moderate",
+  "preferences": "pantai, kuliner"
+}
+```
+→ Gemini dulu. Jika error/quota habis → otomatis OpenAI GPT-4o-mini.
+
+### `GET /api/weather?lat=-8.4&lng=115.2&days=3` — Cuaca per hari
+→ Open-Meteo (free, tidak butuh API key)
+
+### `POST /api/split-bill/send-email` — Kirim email tagihan
+```json
+{
+  "trip_name": "Liburan Bali",
+  "items": [{ "description": "Makan malam", "amount": 300000, "paid_by": "Budi", "split_between": ["Budi","Ani"] }],
+  "currency": "Rp",
+  "participant_emails": [{ "name": "Ani", "email": "ani@email.com" }]
+}
+```
+→ Dikirim via Resend dari `onboarding@resend.dev`
+
+### `GET /api/health` — Status semua service
+```json
+{
+  "status": "ok",
+  "services": {
+    "supabase": true,
+    "gemini": true,
+    "openai_fallback": true,
+    "resend": true
+  }
+}
+```
+
+---
+
+## 🔧 Troubleshooting
+
+### ❌ Frontend tidak bisa konek backend (`fetch failed` / CORS error)
+**Kemungkinan:** `VITE_API_BASE` mengarah ke tunnel yang tidak aktif.
+
+**Fix:**
+```env
+# Di .env, ganti sementara:
+VITE_API_BASE=http://localhost:3000
+```
+Lalu restart `npm run dev`.
+
+---
+
+### ❌ AI tidak generate itinerary (error 500)
+1. Cek: `curl http://localhost:3000/api/health`
+2. Jika `gemini: false` → quota habis, akan fallback ke OpenAI otomatis
+3. Jika `openai_fallback: false` → cek `OPENAI_API_KEY` di `.env`
+
+---
+
+### ❌ Login/session habis tiba-tiba
+1. DevTools → Application → Local Storage → hapus semua key yang diawali `sb-`
+2. Refresh + login ulang
+
+---
+
+### ❌ "Trip Saya" kosong padahal sudah buat trip
+Kemungkinan data di Supabase menggunakan `owner_id` tapi query salah.
+Cek: di Supabase dashboard → Table Editor → `trips` → pastikan kolom `owner_id` berisi user ID kamu.
+
+---
+
+### ❌ Upload foto profil gagal
+Pastikan storage bucket `avatars` sudah dibuat di Supabase.
+Dashboard → Storage → Buckets → harus ada bucket bernama `avatars` (public).
+
+---
+
+## 🚀 Tech Stack
+
+| Layer | Teknologi |
+|-------|-----------|
+| Frontend | React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui, Framer Motion |
+| Backend | Express 5, TypeScript, tsx (hot reload) |
+| Database | Supabase (PostgreSQL + Auth + Storage) |
+| AI Primary | Google Gemini (`@google/generative-ai`) |
+| AI Fallback | OpenAI GPT-4o-mini (`openai`) |
+| Email | Resend (`resend`) |
+| Maps | Leaflet + react-leaflet |
+| Auth | Supabase Auth (email/password + Google OAuth) |
+| Tunnel | Cloudflare Tunnel → `tripplaner.stei.cloud` |
+
+---
+
+## 📐 Arsitektur
+
+```
+Browser
+  │
+  ├── http://localhost:5173      ← Vite (dev) / dist/ (prod)
+  │     React + TypeScript
+  │     VITE_API_BASE ──────────────────────────┐
+  │                                             ↓
+  └── https://tripplaner.stei.cloud  ←── Cloudflare Tunnel
+            │
+            ↓
+        localhost:3000   ← Express server
+            ├── /api/ai          → Gemini / OpenAI
+            ├── /api/weather     → Open-Meteo
+            ├── /api/split-bill  → Resend
+            └── /api/health
+```
+
+---
+
+*Last updated: 2026-05-30*
