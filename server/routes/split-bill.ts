@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { sendSplitBillEmails } from '../services/resend.js'
 
 const router = Router()
 
@@ -139,7 +140,7 @@ function generateSplitBillHTML(
 // POST /api/split-bill/send-email
 router.post('/send-email', async (req, res) => {
   try {
-    const { trip_name, items, currency = 'IDR', participant_emails } = req.body
+    const { trip_name, items, currency = 'Rp', participant_emails = [] } = req.body
 
     if (!trip_name || !items || !Array.isArray(items) || items.length === 0) {
       res.status(400).json({ message: 'trip_name and items[] are required' })
@@ -147,22 +148,50 @@ router.post('/send-email', async (req, res) => {
     }
 
     const balances = calculateBalances(items)
+    const totalAmount = items.reduce((sum: number, b: any) => sum + Number(b.amount), 0)
+
+    // Enrich balances with email from participant_emails lookup
+    const enrichedBalances = balances.map(b => {
+      const emailEntry = (participant_emails as any[]).find(
+        (p: any) => p.name?.toLowerCase() === b.name.toLowerCase()
+      )
+      return { ...b, email: emailEntry?.email || '' }
+    })
+
+    // Send real emails via Resend if any emails are provided
+    const hasEmails = enrichedBalances.some(b => b.email)
+    let sent_count = 0
+    let email_errors: string[] = []
+
+    if (hasEmails) {
+      const result = await sendSplitBillEmails({
+        tripName: trip_name,
+        items,
+        currency,
+        participantEmails: enrichedBalances,
+        totalAmount,
+      })
+      sent_count = result.sent
+      email_errors = result.errors
+    }
+
     const preview_html = generateSplitBillHTML(trip_name, items, balances, currency)
-
-    // If participant emails are provided, you would send via:
-    // - Supabase Edge Functions + Resend/SendGrid, or
-    // - Direct SMTP via nodemailer
-    // For now, we return the preview and send status
-
-    const sent_count = participant_emails?.length || 0
 
     res.json({
       sent_count,
       preview_html,
-      balances,
-      message: sent_count > 0
-        ? `Email sent to ${sent_count} participant(s)`
-        : 'Preview generated (no emails sent - configure email provider)',
+      balances: enrichedBalances.map(b => ({
+        name: b.name,
+        owes: b.owes,
+        owed: b.owed,
+        net: b.net,
+      })),
+      errors: email_errors,
+      message: hasEmails
+        ? sent_count > 0
+          ? `Email sent to ${sent_count} participant(s)`
+          : 'No emails sent — check errors'
+        : 'Preview generated (no emails provided)',
     })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Failed to process split bill'
