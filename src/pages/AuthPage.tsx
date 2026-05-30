@@ -530,6 +530,10 @@ export function LoginPage({ navigateTo, onLoginSuccess, supabaseConfigured }: Lo
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const [emailSent, setEmailSent] = useState(false)
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
+  const [forgotEmail, setForgotEmail] = useState("")
+  const [forgotLoading, setForgotLoading] = useState(false)
+  const [forgotSuccess, setForgotSuccess] = useState(false)
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -588,7 +592,12 @@ export function LoginPage({ navigateTo, onLoginSuccess, supabaseConfigured }: Lo
   }
 
   const handleGoogleLogin = async () => {
-    setError("OAuth akan segera tersedia setelah Supabase dikonfigurasi.")
+    try {
+      const { signInWithGoogle } = await import('../lib/supabase')
+      await signInWithGoogle()
+    } catch (err: any) {
+      setError(err.message || 'Gagal masuk dengan Google')
+    }
   }
 
   return (
@@ -659,7 +668,13 @@ export function LoginPage({ navigateTo, onLoginSuccess, supabaseConfigured }: Lo
 
             <div className="space-y-2">
               <div className="flex items-center justify-end">
-                <button className="text-xs text-muted-foreground hover:text-foreground transition-colors">Lupa password?</button>
+                <button
+                  type="button"
+                  onClick={() => setShowForgotPassword(true)}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Lupa password?
+                </button>
               </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -680,6 +695,46 @@ export function LoginPage({ navigateTo, onLoginSuccess, supabaseConfigured }: Lo
                 </button>
               </div>
             </div>
+
+            {showForgotPassword && (
+              <div className="space-y-3 p-4 bg-secondary/30 rounded-xl">
+                <p className="text-sm font-medium">Reset Password</p>
+                <Input
+                  type="email"
+                  placeholder="Email kamu"
+                  value={forgotEmail}
+                  onChange={e => setForgotEmail(e.target.value)}
+                />
+                {forgotSuccess && (
+                  <p className="text-xs text-green-500">Email reset dikirim! Cek inbox kamu.</p>
+                )}
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" className="flex-1"
+                    type="button"
+                    onClick={() => { setShowForgotPassword(false); setForgotSuccess(false) }}>
+                    Batal
+                  </Button>
+                  <Button variant="gradient" size="sm" className="flex-1"
+                    type="button"
+                    disabled={forgotLoading}
+                    onClick={async () => {
+                      if (!forgotEmail) return
+                      setForgotLoading(true)
+                      try {
+                        const { resetPasswordForEmail } = await import('../lib/supabase')
+                        await resetPasswordForEmail(forgotEmail)
+                        setForgotSuccess(true)
+                      } catch (err: any) {
+                        // silently fail
+                      } finally {
+                        setForgotLoading(false)
+                      }
+                    }}>
+                    {forgotLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Kirim Email'}
+                  </Button>
+                </div>
+              </div>
+            )}
 
             <Button
               type="submit"
@@ -759,6 +814,19 @@ export function RegisterPage({ navigateTo, onLoginSuccess, supabaseConfigured }:
     }
 
     try {
+      // Check if email already exists
+      try {
+        const { checkEmailExists } = await import('../lib/supabase')
+        const exists = await checkEmailExists(email)
+        if (exists) {
+          setError('Email sudah terdaftar. Silakan masuk atau gunakan email lain.')
+          setIsLoading(false)
+          return
+        }
+      } catch {
+        // If check fails, proceed (Supabase will catch duplicate)
+      }
+
       const { data, error } = await signUp(email, password, name)
       if (error) {
         if (error.message.includes("already registered")) {
@@ -789,7 +857,12 @@ export function RegisterPage({ navigateTo, onLoginSuccess, supabaseConfigured }:
   }
 
   const handleGoogleRegister = async () => {
-    setError("OAuth akan segera tersedia setelah Supabase dikonfigurasi.")
+    try {
+      const { signInWithGoogle } = await import('../lib/supabase')
+      await signInWithGoogle()
+    } catch (err: any) {
+      setError(err.message || 'Gagal masuk dengan Google')
+    }
   }
 
   return (

@@ -284,3 +284,39 @@ export function subscribeToTrips(callback: (trip: Trip) => void) {
 
   return () => supabase.removeChannel(channel)
 }
+
+// Reset password (sends email)
+export async function resetPasswordForEmail(email: string) {
+  if (!supabase) throw new Error('Supabase not configured')
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/?type=recovery`,
+  })
+  if (error) throw error
+}
+
+// Sign in with Google OAuth
+export async function signInWithGoogle() {
+  if (!supabase) throw new Error('Supabase not configured')
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: `${window.location.origin}/?auth=success`,
+    },
+  })
+  if (error) throw error
+}
+
+// Check if email already registered (heuristic: try signing in with wrong password)
+export async function checkEmailExists(email: string): Promise<boolean> {
+  if (!supabase) return false
+  const { error } = await supabase.auth.signInWithPassword({ email, password: '__check_only__' })
+  if (!error) return true
+  return error.message !== 'Invalid login credentials' && !error.message.includes('not found')
+}
+
+// Update password (requires current session)
+export async function updatePassword(newPassword: string) {
+  if (!supabase) throw new Error('Supabase not configured')
+  const { error } = await supabase.auth.updateUser({ password: newPassword })
+  if (error) throw error
+}

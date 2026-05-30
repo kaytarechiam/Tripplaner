@@ -99,7 +99,9 @@ function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       console.debug(`[TripPlanner] Auth event: ${event}`)
 
-      if (event === "SIGNED_IN" && session?.user) {
+      if (event === "PASSWORD_RECOVERY") {
+        navigateTo("settings")
+      } else if (event === "SIGNED_IN" && session?.user) {
         const u = session.user
         setUser({
           id: u.id,
