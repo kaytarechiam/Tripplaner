@@ -1,19 +1,19 @@
-import { useState } from "react"
+// src/components/TripDetailModal.tsx
+import { useState, useEffect } from "react"
 import {
-  MapPin, Calendar, Clock, Users, Star, Heart,
-  Share2, Copy, ExternalLink, Loader2, Check,
-  Plane, Globe, MessageSquare, X
+  MapPin, Calendar, Star, Copy,
+  Share2, Loader2, Check,
+  MessageSquare, X, Send
 } from "lucide-react"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
-import { supabase } from "@/lib/supabase"
-import { createTrip, addItineraryItem } from "@/lib/supabase"
+import { supabase, saveTrip, getComments, addComment } from "@/lib/supabase"
+import type { TripComment } from "@/lib/supabase"
 
 interface PublicTrip {
   id: string
@@ -32,6 +32,7 @@ interface PublicTrip {
   tags: string[]
   author: string
   authorAvatar: string
+  image?: string
 }
 
 interface TripDetailModalProps {
@@ -40,94 +41,63 @@ interface TripDetailModalProps {
   onCopied?: () => void
 }
 
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return "Belum diatur"
-  return new Date(dateStr + "T00:00:00").toLocaleDateString("id-ID", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  })
-}
-
-function getDuration(start: string | null, end: string | null): number {
-  if (!start || !end) return 0
-  const s = new Date(start + "T00:00:00").getTime()
-  const e = new Date(end + "T00:00:00").getTime()
-  return Math.max(1, Math.round((e - s) / 86400000) + 1)
+const CATEGORY_ICONS: Record<string, string> = {
+  hotel: "🏨", landmark: "🏛️", food: "🍜",
+  nature: "🌿", activity: "🎯", shopping: "🛍️", transport: "🚗",
 }
 
 export function TripDetailModal({ trip, onClose, onCopied }: TripDetailModalProps) {
-  const [liked, setLiked] = useState(false)
   const [copied, setCopied] = useState(false)
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [copyLoading, setCopyLoading] = useState(false)
   const [startDate, setStartDate] = useState("")
   const [error, setError] = useState("")
+  const [itinerary, setItinerary] = useState<any[]>([])
+  const [comments, setComments] = useState<TripComment[]>([])
+  const [newComment, setNewComment] = useState("")
+  const [commentLoading, setCommentLoading] = useState(false)
+  const [activeTab, setActiveTab] = useState<"itinerary" | "comments">("itinerary")
+
+  useEffect(() => {
+    if (!trip || !supabase) return
+    // Load itinerary items — use actual DB column names
+    supabase
+      .from('itinerary_items')
+      .select('*')
+      .eq('trip_id', trip.id)
+      .order('day_number', { ascending: true })
+      .order('order', { ascending: true })
+      .then(({ data }) => setItinerary(data || []))
+
+    // Load comments
+    getComments(trip.id).then(setComments)
+  }, [trip?.id])
 
   if (!trip) return null
-
-  const duration = getDuration(trip.start_date, trip.end_date)
-
-  const handleLike = async () => {
-    if (!supabase) return
-    try {
-      const { getSession } = await import("@/lib/supabase")
-      const session = await getSession()
-      const userId = session?.user?.id
-      if (!userId) return
-
-      await supabase.from("bucket_list").upsert({
-        user_id: userId,
-        trip_id: trip.id,
-        trip_name: trip.name,
-        destination: trip.destination,
-        created_at: new Date().toISOString(),
-      })
-      setLiked(true)
-    } catch (err) {
-      console.error("Like error:", err)
-    }
-  }
 
   const handleShare = async () => {
     const url = `${window.location.origin}/explore?trip=${trip.id}`
     if (navigator.share) {
-      try {
-        await navigator.share({ title: trip.name, text: `Check out this trip: ${trip.name}`, url })
-      } catch {
-        // User cancelled or not supported
-      }
+      try { await navigator.share({ title: trip.name, url }) } catch {}
     } else {
       await navigator.clipboard.writeText(url)
-      // Show toast-like feedback
-      const btn = document.getElementById("share-btn")
-      if (btn) {
-        btn.textContent = "Copied!"
-        setTimeout(() => { btn.textContent = "Share" }, 2000)
-      }
     }
   }
 
   const handleCopyToMyTrips = async () => {
-    if (!startDate) {
-      setError("Pilih tanggal mulai dulu")
-      return
-    }
-    if (!supabase) return
-
+    if (!startDate) { setError("Pilih tanggal mulai dulu"); return }
+    if (!supabase) { setError("Supabase tidak dikonfigurasi"); return }
     setCopyLoading(true)
     setError("")
     try {
-      const { getSession } = await import("@/lib/supabase")
-      const session = await getSession()
-      const userId = session?.user?.id
-      if (!userId) {
-        setError("Login dulu untuk menyalin trip")
+      // Use getUser() — fresh auth call, not cached session
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError || !user) {
+        setError("Sesi kadaluarsa. Silakan login ulang.")
         setCopyLoading(false)
         return
       }
 
-      // Calculate end date
       let endDate = ""
       if (trip.days > 0) {
         const start = new Date(startDate + "T00:00:00")
@@ -135,62 +105,79 @@ export function TripDetailModal({ trip, onClose, onCopied }: TripDetailModalProp
         endDate = end.toISOString().split("T")[0]
       }
 
-      // Create new trip
-      const newTrip = await createTrip({
+      // Save to saved_trips (not trips — this is a copy from Explore)
+      await saveTrip({
+        original_trip_id: trip.id,
         name: trip.name,
         destination: trip.destination,
+        days: trip.days,
         start_date: startDate,
         end_date: endDate || undefined,
-        status: "planning",
+        tags: trip.tags,
       })
 
       setCopied(true)
-      setTimeout(() => {
-        onCopied?.()
-        onClose()
-      }, 1200)
-    } catch (err) {
+      setTimeout(() => { onCopied?.(); onClose() }, 1200)
+    } catch (err: unknown) {
       console.error("Copy trip error:", err)
-      setError("Gagal menyalin trip. Coba lagi.")
+      setError(err instanceof Error ? err.message : "Gagal menyalin trip. Coba lagi.")
     } finally {
       setCopyLoading(false)
     }
   }
 
+  const handleAddComment = async () => {
+    if (!newComment.trim() || !supabase) return
+    setCommentLoading(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setError("Login dulu untuk berkomentar"); return }
+      const name = user.user_metadata?.full_name || user.email?.split("@")[0] || "User"
+      const comment = await addComment(trip.id, newComment.trim(), name)
+      setComments(prev => [...prev, comment])
+      setNewComment("")
+    } catch (err: unknown) {
+      console.error("Comment error:", err)
+    } finally {
+      setCommentLoading(false)
+    }
+  }
+
+  // Group itinerary by day_number (actual DB column)
+  const dayGroups = itinerary.reduce((acc, item) => {
+    const d = item.day_number || 1
+    if (!acc[d]) acc[d] = []
+    acc[d].push(item)
+    return acc
+  }, {} as Record<number, any[]>)
+
   return (
     <Dialog open={!!trip} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          {/* Cover Image */}
-          <div className={cn("aspect-video rounded-xl bg-gradient-to-br -mx-6 -mt-6 mb-4 relative overflow-hidden", trip.gradient)}>
+          {/* Cover */}
+          <div className={cn(
+            "aspect-video rounded-xl -mx-6 -mt-6 mb-4 relative overflow-hidden",
+            trip.image ? "" : `bg-gradient-to-br ${trip.gradient}`
+          )}>
+            {trip.image && (
+              <img src={trip.image} alt={trip.name} className="w-full h-full object-cover" />
+            )}
             <div className="absolute inset-0 bg-black/20" />
-
-            {/* Badges */}
-            <div className="absolute top-3 left-3 flex gap-2">
+            <div className="absolute bottom-3 left-3 flex gap-2">
               <span className="glass-card px-2 py-1 text-xs text-black flex items-center gap-1">
                 <Calendar className="w-3 h-3 text-black" />
                 {trip.days} hari
               </span>
-              {trip.places > 0 && (
-                <span className="glass-card px-2 py-1 text-xs text-black flex items-center gap-1">
-                  <MapPin className="w-3 h-3 text-black" />
-                  {trip.places} tempat
-                </span>
-              )}
             </div>
-
-            {/* Close button */}
-            <button
-              onClick={onClose}
-              className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/30 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/50 transition-colors"
-            >
+            <button onClick={onClose}
+              className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/30 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/50">
               <X className="w-4 h-4" />
             </button>
           </div>
 
           <div className="flex items-start justify-between gap-3">
             <div>
-              <Badge className="mb-2">{trip.status}</Badge>
               <DialogTitle className="text-xl">{trip.name}</DialogTitle>
               <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
                 <MapPin className="w-3.5 h-3.5" />
@@ -202,43 +189,14 @@ export function TripDetailModal({ trip, onClose, onCopied }: TripDetailModalProp
               <span className="font-bold">{trip.rating.toFixed(1)}</span>
             </div>
           </div>
-
-          {/* Author */}
-          <div className="flex items-center gap-2 pt-1">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[var(--aurora-start)] to-[var(--aurora-end)] flex items-center justify-center text-white text-xs font-bold">
-              {trip.authorAvatar}
-            </div>
-            <span className="text-sm text-muted-foreground">by @{trip.author}</span>
-          </div>
+          <p className="text-sm text-muted-foreground">oleh @{trip.author}</p>
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Stats Row */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="p-3 rounded-xl bg-secondary/50 text-center">
-              <p className="text-xs text-muted-foreground">Durasi</p>
-              <p className="font-bold">{duration > 0 ? `${duration} hari` : `${trip.days} hari`}</p>
-            </div>
-            <div className="p-3 rounded-xl bg-secondary/50 text-center">
-              <p className="text-xs text-muted-foreground">Like</p>
-              <p className="font-bold flex items-center justify-center gap-1">
-                <Heart className="w-3 h-3 text-red-400 fill-red-400" />
-                {trip.likes}
-              </p>
-            </div>
-            <div className="p-3 rounded-xl bg-secondary/50 text-center">
-              <p className="text-xs text-muted-foreground">Komentar</p>
-              <p className="font-bold flex items-center justify-center gap-1">
-                <MessageSquare className="w-3 h-3 text-blue-400" />
-                {trip.comments}
-              </p>
-            </div>
-          </div>
-
           {/* Tags */}
           {trip.tags.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {trip.tags.map((tag) => (
+              {trip.tags.map(tag => (
                 <span key={tag} className="px-2.5 py-1 bg-secondary/60 rounded-full text-xs font-medium">
                   #{tag}
                 </span>
@@ -246,75 +204,113 @@ export function TripDetailModal({ trip, onClose, onCopied }: TripDetailModalProp
             </div>
           )}
 
-          {/* Date info */}
-          {(trip.start_date || trip.end_date) && (
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-secondary/50">
-              <Calendar className="w-4 h-4 text-muted-foreground" />
-              <div>
-                <p className="text-sm font-medium">
-                  {formatDate(trip.start_date)} — {formatDate(trip.end_date)}
+          {/* Tabs */}
+          <div className="flex gap-1 p-1 bg-secondary/40 rounded-xl">
+            {(["itinerary", "comments"] as const).map(tab => (
+              <button key={tab} onClick={() => setActiveTab(tab)}
+                className={cn("flex-1 py-2 rounded-lg text-sm font-medium transition-all",
+                  activeTab === tab ? "bg-white shadow-sm text-foreground" : "text-muted-foreground")}>
+                {tab === "itinerary" ? "📍 Itinerary" : `💬 Komentar (${comments.length})`}
+              </button>
+            ))}
+          </div>
+
+          {/* Itinerary Tab */}
+          {activeTab === "itinerary" && (
+            <div className="space-y-3">
+              {Object.keys(dayGroups).length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-6">
+                  Belum ada itinerary detail untuk trip ini.
                 </p>
-              </div>
+              ) : (
+                Object.entries(dayGroups).map(([day, items]) => (
+                  <div key={day} className="space-y-2">
+                    <h4 className="text-sm font-bold text-muted-foreground">Hari {day}</h4>
+                    {(items as any[]).map((item, i) => (
+                      <div key={i} className="flex gap-3 p-3 bg-secondary/30 rounded-xl">
+                        <span className="text-lg">{CATEGORY_ICONS[item.category] || "📌"}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm">{item.name || item.title}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {item.time} · {item.location}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {/* Comments Tab */}
+          {activeTab === "comments" && (
+            <div className="space-y-3">
+              {comments.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Belum ada komentar. Jadilah yang pertama!
+                </p>
+              ) : (
+                comments.map(c => (
+                  <div key={c.id} className="flex gap-3 p-3 bg-secondary/30 rounded-xl">
+                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[var(--aurora-start)] to-[var(--aurora-end)] flex items-center justify-center text-white text-xs font-bold shrink-0">
+                      {(c.author_name || "U")[0].toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium">{c.author_name || "User"}</p>
+                      <p className="text-sm">{c.content}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+              {/* Add comment */}
+              {supabase && (
+                <div className="flex gap-2 pt-1">
+                  <Input
+                    placeholder="Tambah komentar..."
+                    value={newComment}
+                    onChange={e => setNewComment(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleAddComment()}
+                    className="text-sm"
+                  />
+                  <Button size="sm" variant="gradient" onClick={handleAddComment} disabled={commentLoading}>
+                    {commentLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 
           {/* Date Picker for Copy */}
-          {showDatePicker ? (
+          {showDatePicker && (
             <div className="space-y-3 p-4 rounded-xl bg-gradient-to-br from-[var(--aurora-start)]/5 to-[var(--aurora-end)]/5 border border-[var(--aurora-start)]/20">
               <Label>Pilih Tanggal Mulai Trip</Label>
-              <Input
-                type="date"
-                value={startDate}
-                onChange={(e) => { setStartDate(e.target.value); setError("") }}
-                className="w-full"
-              />
+              <Input type="date" value={startDate}
+                min={new Date().toISOString().split("T")[0]}
+                onChange={e => { setStartDate(e.target.value); setError("") }} />
               {error && <p className="text-xs text-red-500">{error}</p>}
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="flex-1" onClick={() => setShowDatePicker(false)}>
-                  Batal
-                </Button>
-                <Button
-                  variant="gradient"
-                  size="sm"
-                  className="flex-1"
-                  onClick={handleCopyToMyTrips}
-                  disabled={copyLoading}
-                >
-                  {copyLoading ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : copied ? <Check className="w-4 h-4 mr-1" /> : <Copy className="w-4 h-4 mr-1" />}
-                  {copied ? "Berhasil disalin!" : copyLoading ? "Menyalin..." : "Konfirmasi"}
+                <Button variant="outline" size="sm" className="flex-1"
+                  onClick={() => setShowDatePicker(false)}>Batal</Button>
+                <Button variant="gradient" size="sm" className="flex-1"
+                  onClick={handleCopyToMyTrips} disabled={copyLoading}>
+                  {copyLoading ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> :
+                    copied ? <Check className="w-4 h-4 mr-1" /> : <Copy className="w-4 h-4 mr-1" />}
+                  {copied ? "Berhasil!" : copyLoading ? "Menyalin..." : "Konfirmasi"}
                 </Button>
               </div>
             </div>
-          ) : null}
+          )}
 
-          {/* Action Buttons */}
+          {/* Action Buttons — only Share + Salin (no Simpan) */}
           <div className="flex gap-2 pt-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex-1"
-              onClick={handleLike}
-            >
-              <Heart className={cn("w-4 h-4 mr-1", liked && "fill-red-500 text-red-500")} />
-              {liked ? "Disimpan" : "Simpan"}
-            </Button>
-            <Button
-              id="share-btn"
-              variant="outline"
-              size="sm"
-              className="flex-1"
-              onClick={handleShare}
-            >
+            <Button variant="outline" size="sm" className="flex-1" onClick={handleShare}>
               <Share2 className="w-4 h-4 mr-1" />
               Share
             </Button>
             {!showDatePicker && (
-              <Button
-                variant="gradient"
-                size="sm"
-                className="flex-1"
-                onClick={() => setShowDatePicker(true)}
-              >
+              <Button variant="gradient" size="sm" className="flex-1"
+                onClick={() => setShowDatePicker(true)}>
                 <Copy className="w-4 h-4 mr-1" />
                 Salin ke Trip Saya
               </Button>

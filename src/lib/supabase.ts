@@ -320,3 +320,79 @@ export async function updatePassword(newPassword: string) {
   const { error } = await supabase.auth.updateUser({ password: newPassword })
   if (error) throw error
 }
+
+// ─── Saved Trips ─────────────────────────────────────────────
+
+export type SavedTrip = {
+  id: string
+  user_id: string
+  original_trip_id?: string
+  name: string
+  destination: string
+  days: number
+  start_date?: string
+  end_date?: string
+  tags?: string[]
+  created_at: string
+}
+
+export async function saveTrip(trip: Omit<SavedTrip, 'id' | 'user_id' | 'created_at'>) {
+  if (!supabase) throw new Error('Supabase not configured')
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+  const { data, error } = await supabase
+    .from('saved_trips')
+    .insert({ ...trip, user_id: user.id })
+    .select()
+    .single()
+  if (error) throw error
+  return data as SavedTrip
+}
+
+export async function getSavedTrips() {
+  if (!supabase) throw new Error('Supabase not configured')
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+  const { data, error } = await supabase
+    .from('saved_trips')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data as SavedTrip[]
+}
+
+// ─── Trip Comments ────────────────────────────────────────────
+
+export type TripComment = {
+  id: string
+  trip_id: string
+  user_id: string
+  author_name?: string
+  content: string
+  created_at: string
+}
+
+export async function getComments(tripId: string) {
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from('trip_comments')
+    .select('*')
+    .eq('trip_id', tripId)
+    .order('created_at', { ascending: true })
+  if (error) return []
+  return data as TripComment[]
+}
+
+export async function addComment(tripId: string, content: string, authorName: string) {
+  if (!supabase) throw new Error('Supabase not configured')
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+  const { data, error } = await supabase
+    .from('trip_comments')
+    .insert({ trip_id: tripId, user_id: user.id, content, author_name: authorName })
+    .select()
+    .single()
+  if (error) throw error
+  return data as TripComment
+}

@@ -13,6 +13,33 @@ import { useState, useEffect } from "react"
 import { supabase } from "../lib/supabase"
 import { TripDetailModal } from "../components/TripDetailModal"
 
+// Pre-seeded destination images from Unsplash (reliable, no API key needed)
+const DESTINATION_IMAGES: Record<string, string> = {
+  bali: "https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=800&q=80",
+  lombok: "https://images.unsplash.com/photo-1555400038-63f5ba517a47?w=800&q=80",
+  jakarta: "https://images.unsplash.com/photo-1558636508-e0db3813bd1d?w=800&q=80",
+  bandung: "https://images.unsplash.com/photo-1617871196891-2b6e44e6b6a6?w=800&q=80",
+  jogja: "https://images.unsplash.com/photo-1568402102990-bc541580a0d5?w=800&q=80",
+  yogyakarta: "https://images.unsplash.com/photo-1568402102990-bc541580a0d5?w=800&q=80",
+  surabaya: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&q=80",
+  semarang: "https://images.unsplash.com/photo-1558618047-3c8c76ca7d13?w=800&q=80",
+  malang: "https://images.unsplash.com/photo-1570459027562-4a916cc6111f?w=800&q=80",
+  Raja_Ampat: "https://images.unsplash.com/photo-1540541338287-41700207dee6?w=800&q=80",
+  komodo: "https://images.unsplash.com/photo-1519046904884-53103b34b206?w=800&q=80",
+  labuan_bajo: "https://images.unsplash.com/photo-1519046904884-53103b34b206?w=800&q=80",
+  flores: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&q=80",
+  nusa_penida: "https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=800&q=80",
+  ubud: "https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=800&q=80",
+  kuta: "https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=800&q=80",
+  seminyak: "https://images.unsplash.com/photo-1570459027562-4a916cc6111f?w=800&q=80",
+  default: "https://images.unsplash.com/photo-1488085061387-422e29b40080?w=800&q=80",
+}
+
+function getDestinationImage(destination: string): string | null {
+  const key = destination.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "")
+  return DESTINATION_IMAGES[key] || DESTINATION_IMAGES[Object.keys(DESTINATION_IMAGES).find(k => key.includes(k)) || ""] || null
+}
+
 type Page = "landing" | "login" | "register" | "home" | "editor" | "ai" | "splitbill" | "explore" | "profile" | "achievements" | "bucketlist" | "settings" | "notifications"
 
 interface ExploreProps {
@@ -45,6 +72,7 @@ interface PublicTrip {
   tags: string[]
   author: string
   authorAvatar: string
+  image?: string
 }
 
 const GRADIENTS = [
@@ -55,6 +83,22 @@ const GRADIENTS = [
   "from-fuchsia-400 via-pink-500 to-rose-600",
   "from-cyan-400 via-blue-500 to-indigo-600",
 ]
+
+// High-quality destination images from Unsplash
+const DEST_IMAGES: Record<string, string> = {
+  bali: "https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=800&q=80",
+  yogyakarta: "https://images.unsplash.com/photo-1598857938317-7e52f7c8e90f?w=800&q=80",
+  lombok: "https://images.unsplash.com/photo-1518509562904-e7ef99cdcc86?w=800&q=80",
+  jakarta: "https://images.unsplash.com/photo-1508807526345-15e9b5f4eaff?w=800&q=80",
+  bandung: "https://images.unsplash.com/photo-1556268736-1d26d4d8bdc9?w=800&q=80",
+  surabaya: "https://images.unsplash.com/photo-1580130712686-1c5e5d5e4c7a?w=800&q=80",
+  komodo: "https://images.unsplash.com/photo-1559827291-72ee739d0d9a?w=800&q=80",
+  rajampat: "https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?w=800&q=80",
+  bromo: "https://images.unsplash.com/photo-1580057573934-bfd0f7b29e40?w=800&q=80",
+  semarang: "https://images.unsplash.com/photo-1570521462031-7e80f2f76f36?w=800&q=80",
+  malang: "https://images.unsplash.com/photo-1583508915901-b46f4c9b59a0?w=800&q=80",
+  denpasar: "https://images.unsplash.com/photo-1518544801976-3e159e50e5bb?w=800&q=80",
+}
 
 // Mock trending trips for dev mode
 const MOCK_TRIPS: PublicTrip[] = [
@@ -75,6 +119,7 @@ const MOCK_TRIPS: PublicTrip[] = [
     tags: ["beach", "culture"],
     author: "traveler_bali",
     authorAvatar: "TB",
+    image: DEST_IMAGES.bali,
   },
   {
     id: "mock-2",
@@ -93,6 +138,7 @@ const MOCK_TRIPS: PublicTrip[] = [
     tags: ["culinary", "city"],
     author: "foodie_jkt",
     authorAvatar: "FJ",
+    image: DEST_IMAGES.jakarta,
   },
   {
     id: "mock-3",
@@ -111,6 +157,7 @@ const MOCK_TRIPS: PublicTrip[] = [
     tags: ["mountain", "nature"],
     author: "adventure_seeker",
     authorAvatar: "AS",
+    image: DEST_IMAGES.bromo,
   },
   {
     id: "mock-4",
@@ -129,6 +176,7 @@ const MOCK_TRIPS: PublicTrip[] = [
     tags: ["culture", "city"],
     author: "yogi_lover",
     authorAvatar: "YL",
+    image: DEST_IMAGES.yogyakarta,
   },
   {
     id: "mock-5",
@@ -147,6 +195,7 @@ const MOCK_TRIPS: PublicTrip[] = [
     tags: ["beach", "nature"],
     author: "surf_chick",
     authorAvatar: "SC",
+    image: DEST_IMAGES.lombok,
   },
   {
     id: "mock-6",
@@ -165,6 +214,7 @@ const MOCK_TRIPS: PublicTrip[] = [
     tags: ["mountain", "culinary"],
     author: "roadtrippers",
     authorAvatar: "RT",
+    image: DEST_IMAGES.bandung,
   },
   {
     id: "mock-7",
@@ -183,6 +233,7 @@ const MOCK_TRIPS: PublicTrip[] = [
     tags: ["beach", "nature"],
     author: "dive_master",
     authorAvatar: "DM",
+    image: DEST_IMAGES.rajaapat,
   },
   {
     id: "mock-8",
@@ -201,6 +252,159 @@ const MOCK_TRIPS: PublicTrip[] = [
     tags: ["city", "culinary"],
     author: "surabaya_native",
     authorAvatar: "SN",
+    image: DEST_IMAGES.surabaya,
+  },
+  {
+    id: "mock-9",
+    trip_id: "mock-9",
+    name: "Petualangan Komodo & Pink Beach",
+    destination: "Komodo, NTT",
+    start_date: "2026-11-01",
+    end_date: "2026-11-05",
+    status: "planning",
+    days: 5,
+    places: 8,
+    likes: 2765,
+    comments: 156,
+    rating: 4.9,
+    gradient: "from-emerald-400 via-teal-500 to-blue-500",
+    tags: ["beach", "nature"],
+    author: "eco_traveler",
+    authorAvatar: "ET",
+    image: DEST_IMAGES.komodo,
+  },
+  {
+    id: "mock-10",
+    trip_id: "mock-10",
+    name: "Weekend di Kota Semarang",
+    destination: "Semarang, Jawa Tengah",
+    start_date: "2026-06-15",
+    end_date: "2026-06-17",
+    status: "active",
+    days: 3,
+    places: 10,
+    likes: 543,
+    comments: 34,
+    rating: 4.5,
+    gradient: "from-amber-400 via-orange-500 to-red-600",
+    tags: ["culinary", "city", "culture"],
+    author: "semarang_walker",
+    authorAvatar: "SW",
+    image: DEST_IMAGES.semarang,
+  },
+  {
+    id: "mock-11",
+    trip_id: "mock-11",
+    name: "Healing di Malang & Batu",
+    destination: "Malang, Jawa Timur",
+    start_date: "2026-07-10",
+    end_date: "2026-07-14",
+    status: "planning",
+    days: 4,
+    places: 9,
+    likes: 1234,
+    comments: 67,
+    rating: 4.7,
+    gradient: "from-emerald-400 via-teal-500 to-blue-500",
+    tags: ["nature", "mountain"],
+    author: "heal_seeker",
+    authorAvatar: "HS",
+    image: DEST_IMAGES.malang,
+  },
+  {
+    id: "mock-12",
+    trip_id: "mock-12",
+    name: "Explore Budaya & Kuliner Solo",
+    destination: "Solo, Jawa Tengah",
+    start_date: "2026-08-01",
+    end_date: "2026-08-03",
+    status: "completed",
+    days: 3,
+    places: 11,
+    likes: 876,
+    comments: 52,
+    rating: 4.6,
+    gradient: "from-pink-400 via-rose-500 to-red-500",
+    tags: ["culture", "culinary"],
+    author: "solo_explorer",
+    authorAvatar: "SE",
+    image: DEST_IMAGES.yogyakarta,
+  },
+  {
+    id: "mock-13",
+    trip_id: "mock-13",
+    name: "Petualangan 5 Hari di Yogyakarta",
+    destination: "Yogyakarta, Indonesia",
+    start_date: "2026-07-10",
+    end_date: "2026-07-14",
+    status: "planning",
+    days: 5,
+    places: 14,
+    likes: 2156,
+    comments: 134,
+    rating: 4.9,
+    gradient: "from-amber-400 via-orange-500 to-red-500",
+    tags: ["culture", "history", "nature"],
+    author: "jogja_lover",
+    authorAvatar: "JL",
+    image: "https://images.unsplash.com/photo-1596546731098-4f4e5ad6e3a5?w=800&q=80",
+  },
+  {
+    id: "mock-14",
+    trip_id: "mock-14",
+    name: "Weekend Escape ke Bandung",
+    destination: "Bandung, Jawa Barat",
+    start_date: "2026-06-20",
+    end_date: "2026-06-22",
+    status: "planning",
+    days: 2,
+    places: 8,
+    likes: 1823,
+    comments: 98,
+    rating: 4.7,
+    gradient: "from-green-400 via-emerald-500 to-teal-500",
+    tags: ["nature", "culinary"],
+    author: "bandung_explorer",
+    authorAvatar: "BE",
+    image: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&q=80",
+  },
+  {
+    id: "mock-15",
+    trip_id: "mock-15",
+    name: "Liburan Musim Panas di Lombok",
+    destination: "Lombok, NTB",
+    start_date: "2026-08-15",
+    end_date: "2026-08-20",
+    status: "planning",
+    days: 5,
+    places: 12,
+    likes: 1654,
+    comments: 87,
+    rating: 4.8,
+    gradient: "from-cyan-400 via-blue-500 to-indigo-500",
+    tags: ["beach", "nature"],
+    author: "lombok_traveler",
+    authorAvatar: "LT",
+    image: "https://images.unsplash.com/photo-1517760444937-f6397edcbbcd?w=800&q=80",
+  },
+  {
+    id: "mock-16",
+    trip_id: "mock-16",
+    name: "Backpacking Budaya Jawa Timur",
+    destination: "Jawa Timur, Indonesia",
+    start_date: "2026-09-01",
+    end_date: "2026-09-07",
+    status: "planning",
+    days: 7,
+    places: 18,
+    likes: 987,
+    comments: 45,
+    rating: 4.6,
+    gradient: "from-purple-400 via-pink-500 to-rose-500",
+    tags: ["culture", "history"],
+    author: "jawa_explorer",
+    authorAvatar: "JE",
+    image: "https://images.unsplash.com/photo-1537531383496-f4749b8032cf?w=800&q=80",
   },
 ]
 
@@ -398,8 +602,31 @@ export function Explore({ navigateTo }: ExploreProps) {
                 onClick={() => setSelectedTrip(trip)}
               >
                 {/* Image */}
-                <div className={`aspect-[4/3] rounded-t-2xl bg-gradient-to-br ${trip.gradient} relative overflow-hidden`}>
-                  <div className="absolute inset-0 bg-black/10" />
+                <div className={`aspect-[4/3] rounded-t-2xl relative overflow-hidden ${!trip.image && !getDestinationImage(trip.destination) ? `bg-gradient-to-br ${trip.gradient}` : ""}`}>
+                  {(() => {
+                    const imgSrc = trip.image || getDestinationImage(trip.destination)
+                    return imgSrc ? (
+                      <img
+                        src={imgSrc}
+                        alt={trip.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none"
+                          e.currentTarget.nextElementSibling?.classList.remove("hidden")
+                        }}
+                      />
+                    ) : null
+                  })()}
+                  {/* Fallback gradient (hidden if image loads) */}
+                  <div className={cn("absolute inset-0 bg-gradient-to-br", trip.gradient, "hidden")} />
+                  {!trip.image && !getDestinationImage(trip.destination) && (
+                    <>
+                      <div className="absolute inset-0 bg-black/10" />
+                      <div className="absolute inset-0 flex items-center justify-center opacity-20">
+                        <span className="text-7xl">🌏</span>
+                      </div>
+                    </>
+                  )}
 
                   {/* Actions */}
                   <div className="absolute top-3 right-3 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -474,7 +701,7 @@ export function Explore({ navigateTo }: ExploreProps) {
                   </div>
 
                   {/* Stats */}
-                  <div className="flex items-center justify-between pt-2 border-t border-border">
+                  <div className="flex items-center pt-2 border-t border-border">
                     <div className="flex items-center gap-4 text-sm text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <Heart className="w-4 h-4" />
@@ -485,7 +712,6 @@ export function Explore({ navigateTo }: ExploreProps) {
                         {trip.comments}
                       </span>
                     </div>
-                    <span className="text-xs text-muted-foreground capitalize">{trip.status}</span>
                   </div>
                 </div>
               </motion.div>
