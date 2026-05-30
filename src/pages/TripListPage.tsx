@@ -35,6 +35,67 @@ const GRADIENTS = [
 
 const EMOJIS = ["🏖️", "🏔️", "✈️", "🌸", "🏙️", "🌺"]
 
+// Popular destination image mapping (Unsplash)
+const DEST_IMAGES: Record<string, string> = {
+  bali: "https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=800&q=80",
+  jakarta: "https://images.unsplash.com/photo-1508807526345-15e9b5f4eaff?w=800&q=80",
+  yogyakarta: "https://images.unsplash.com/photo-1598857938317-7e52f7c8e90f?w=800&q=80",
+  bandung: "https://images.unsplash.com/photo-1556268736-1d26d4d8bdc9?w=800&q=80",
+  surabaya: "https://images.unsplash.com/photo-1580130712686-1c5e5d5e4c7a?w=800&q=80",
+  lombok: "https://images.unsplash.com/photo-1518509562904-e7ef99cdcc86?w=800&q=80",
+  bromo: "https://images.unsplash.com/photo-1580057573934-bfd0f7b29e40?w=800&q=80",
+  komodo: "https://images.unsplash.com/photo-1559827291-72ee739d0d9a?w=800&q=80",
+  Raja_Ampat: "https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?w=800&q=80",
+  labuan_bajo: "https://images.unsplash.com/photo-1518544801976-3e159e50e5bb?w=800&q=80",
+  flores: "https://images.unsplash.com/photo-1580060839134-75a5edca2e99?w=800&q=80",
+  semarang: "https://images.unsplash.com/photo-1570521462031-7e80f2f76f36?w=800&q=80",
+  malang: "https://images.unsplash.com/photo-1583508915901-b46f4c9b59a0?w=800&q=80",
+  denpasar: "https://images.unsplash.com/photo-1518544801976-3e159e50e5bb?w=800&q=80",
+  medan: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&q=80",
+  makassar: "https://images.unsplash.com/photo-1577906096429-f73b2c38e82c?w=800&q=80",
+  padang: "https://images.unsplash.com/photo-1550431476-8c80b0a3e6be?w=800&q=80",
+  pekalongan: "https://images.unsplash.com/photo-1583786803926-94ef56c54c1e?w=800&q=80",
+ Solo: "https://images.unsplash.com/photo-1548013146-72479768bada?w=800&q=80",
+  jogja: "https://images.unsplash.com/photo-1598857938317-7e52f7c8e90f?w=800&q=80",
+  "NTB": "https://images.unsplash.com/photo-1518509562904-e7ef99cdcc86?w=800&q=80",
+  "NTT": "https://images.unsplash.com/photo-1580060839134-75a5edca2e99?w=800&q=80",
+  aceh: "https://images.unsplash.com/photo-1550431476-8c80b0a3e6be?w=800&q=80",
+  lampung: "https://images.unsplash.com/photo-1576086213369-c5b79156bb57?w=800&q=80",
+  bengkulu: "https://images.unsplash.com/photo-1506197603052-3cc9c3a201bd?w=800&q=80",
+  jambi: "https://images.unsplash.com/photo-1518105779142-d975f22f1b0a?w=800&q=80",
+  riau: "https://images.unsplash.com/photo-1577906096429-f73b2c38e82c?w=800&q=80",
+  kalimantan: "https://images.unsplash.com/photo-1550997802-5568-40ae6a0be7e4?w=800&q=80",
+  sulawesi: "https://images.unsplash.com/photo-1551434678-e076c223a692?w=800&q=80",
+  papua: "https://images.unsplash.com/photo-1550952726624-21fbba5bab6e?w=800&q=80",
+  jepang: "https://images.unsplash.com/photo-1536098561742-ca998e48cbcc?w=800&q=80",
+  japan: "https://images.unsplash.com/photo-1536098561742-ca998e48cbcc?w=800&q=80",
+  korea: "https://images.unsplash.com/photo-1538485399081-7191377e8241?w=800&q=80",
+  thailand: "https://images.unsplash.com/photo-1528181304800-259b08848526?w=800&q=80",
+  singapore: "https://images.unsplash.com/photo-1525625293386-3f8f99389edd?w=800&q=80",
+  malaysia: "https://images.unsplash.com/photo-1596422846543-75c6fc197f07?w=800&q=80",
+  australia: "https://images.unsplash.com/photo-1523482580672-f109ba8cb9be?w=800&q=80",
+  europa: "https://images.unsplash.com/photo-1499856871958-5b9627545d1a?w=800&q=80",
+  paris: "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=800&q=80",
+  london: "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=800&q=80",
+  usa: "https://images.unsplash.com/photo-1485738422979-f5c462d49f74?w=800&q=80",
+  dubai: "https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=800&q=80",
+}
+
+// Get destination image - check mapping first, then use keyword-based Unsplash
+function getDestinationImage(destination: string): string | null {
+  if (!destination) return null
+  const dest = destination.toLowerCase()
+  for (const [key, url] of Object.entries(DEST_IMAGES)) {
+    if (dest.includes(key.toLowerCase())) return url
+  }
+  // Keyword-based: append travel keyword to destination for better results
+  return `https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&q=80`
+  // Alternative keywords per destination type (fallback if above fails):
+  // Nature: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80"
+  // Beach: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&q=80"
+  // City: "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=800&q=80"
+}
+
 function getStatusLabel(status: string) {
   const map: Record<string, { label: string; color: string }> = {
     planning: { label: "Planning", color: "bg-blue-500/20 text-blue-400" },
@@ -130,7 +191,7 @@ export function TripListPage({ navigateTo, user }: TripListPageProps) {
             <p className="text-sm text-muted-foreground">{trips.length} trip tersimpan</p>
           </div>
           <div className="ml-auto">
-            <Button variant="gradient" size="sm" onClick={() => navigateTo("ai")}>
+            <Button variant="gradient" size="sm" onClick={() => navigateTo("editor")}>
               <Plus className="w-4 h-4 mr-1" />
               Buat Trip
             </Button>
@@ -202,7 +263,7 @@ export function TripListPage({ navigateTo, user }: TripListPageProps) {
               </p>
             </div>
             {!searchQuery && (
-              <Button variant="gradient" onClick={() => navigateTo("ai")}>
+              <Button variant="gradient" onClick={() => navigateTo("editor")}>
                 <Plus className="w-4 h-4 mr-2" />
                 Buat Trip Baru
               </Button>
@@ -226,7 +287,24 @@ export function TripListPage({ navigateTo, user }: TripListPageProps) {
                   className="bg-white border border-border rounded-2xl overflow-hidden cursor-pointer hover:border-[var(--aurora-start)]/30 hover:shadow-md transition-all duration-300 group"
                 >
                   {/* Cover */}
-                  <div className={cn("aspect-video bg-gradient-to-br relative overflow-hidden", gradient)}>
+                  <div className="aspect-video bg-gradient-to-br relative overflow-hidden">
+                    {(() => {
+                      const imgUrl = getDestinationImage(trip.destination)
+                      return imgUrl ? (
+                        <img
+                          src={imgUrl}
+                          alt={trip.destination}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            // Fallback to gradient on error
+                            e.currentTarget.style.display = "none"
+                            e.currentTarget.nextElementSibling?.classList.remove("hidden")
+                          }}
+                        />
+                      ) : null
+                    })()}
+                    {/* Fallback gradient (hidden if image loads) */}
+                    <div className={cn("absolute inset-0 bg-gradient-to-br", gradient, "hidden")} />
                     <div className="absolute inset-0 bg-black/10" />
                     <div className="absolute top-3 right-3">
                       <span className={cn("px-2 py-1 rounded-lg text-xs font-medium glass-card", statusInfo.color)}>

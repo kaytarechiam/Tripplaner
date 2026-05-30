@@ -219,7 +219,7 @@ export function Dashboard({ navigateTo, onLogout, user }: DashboardProps) {
                   <Map className="w-5 h-5 text-[var(--aurora-start)]" />
                   Trip {trips.length > 0 ? `(${trips.length})` : "Aktif"}
                 </h2>
-                <Button variant="ghost" size="sm" onClick={() => trips.length > 0 ? navigateTo("trips") : navigateTo("ai")}>
+                <Button variant="ghost" size="sm" onClick={() => trips.length > 0 ? navigateTo("trips") : navigateTo("editor")}>
                   {trips.length > 0 ? "Lihat Semua" : "Buat Baru"}
                   <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
@@ -296,9 +296,9 @@ export function Dashboard({ navigateTo, onLogout, user }: DashboardProps) {
                   <p className="text-muted-foreground text-sm mb-6">
                     Mulai rencanakan trip pertamamu dengan bantuan AI!
                   </p>
-                  <Button variant="gradient" onClick={() => navigateTo("ai")}>
+                  <Button variant="gradient" onClick={() => navigateTo("editor")}>
                     <Sparkles className="w-4 h-4 mr-2" />
-                    Generate dengan AI
+                    Buat Trip Baru
                   </Button>
                 </div>
               )}

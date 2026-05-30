@@ -502,8 +502,9 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
               <MapIcon className="w-10 h-10 mx-auto mb-3 opacity-20" />
               <p className="text-sm font-medium mb-1">Belum ada itinerary</p>
               <p className="text-xs opacity-70 mb-4">Generate itinerary dengan AI atau tambah manual</p>
-              <Button variant="outline" size="sm" onClick={() => navigateTo("ai")}>
-                <Plane className="w-4 h-4 mr-2" />Generate dengan AI
+              <Button variant="gradient" size="sm" className="gap-2 shadow-lg shadow-purple-500/30" onClick={() => setAiPanelOpen(true)}>
+                <Sparkles className="w-4 h-4" />
+                ✨ Generate dengan AI
               </Button>
             </div>
           ) : (
@@ -611,8 +612,9 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
               {selectedTrip ? "Tambah destinasi atau generate dengan AI" : "Atau buat trip baru untuk memulai"}
             </p>
             {selectedTrip && (
-              <Button variant="gradient" size="sm" className="mt-4" onClick={() => navigateTo("ai")}>
-                <Plane className="w-4 h-4 mr-2" />Generate dengan AI
+              <Button variant="gradient" size="sm" className="mt-4 gap-2 shadow-lg shadow-purple-500/30" onClick={() => setAiPanelOpen(true)}>
+                <Sparkles className="w-4 h-4" />
+                ✨ Generate dengan AI
               </Button>
             )}
           </div>
@@ -623,11 +625,11 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
           <Button
             variant="gradient"
             size="lg"
-            className="rounded-2xl shadow-lg shadow-[#667eea]/40 flex items-center gap-2 h-12 px-5"
+            className="rounded-2xl shadow-lg shadow-purple-500/30 flex items-center gap-2 h-12 px-5"
             onClick={() => setAiPanelOpen(true)}
           >
             <Sparkles className="w-5 h-5" />
-            <span className="font-semibold">TripAI</span>
+            <span className="font-semibold">✨ Generate dengan AI</span>
           </Button>
         </div>
 
