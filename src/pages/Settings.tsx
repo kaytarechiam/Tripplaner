@@ -123,7 +123,7 @@ export function Settings({ navigateTo, onLogout, user, onUserUpdate }: SettingsP
       setProfileAvatarUrl(urlData.publicUrl)
 
       await supabase!.from("profiles").upsert({
-        user_id: user.id,
+        id: user.id,
         avatar_url: urlData.publicUrl,
         updated_at: new Date().toISOString(),
       })
@@ -149,14 +149,14 @@ export function Settings({ navigateTo, onLogout, user, onUserUpdate }: SettingsP
     try {
       // Update auth metadata
       const { error: authError } = await supabase!.auth.updateUser({
-        data: { full_name: profileName },
+        data: { name: profileName },
       })
       if (authError) throw authError
 
       // Update profiles table
       const { error: profileError } = await supabase!.from("profiles").upsert({
-        user_id: user.id,
-        full_name: profileName,
+        id: user.id,
+        name: profileName,
         username: profileUsername,
         bio: profileBio,
         avatar_url: profileAvatarUrl,
@@ -257,7 +257,7 @@ export function Settings({ navigateTo, onLogout, user, onUserUpdate }: SettingsP
       }
 
       if (user && supabase) {
-        await supabase.from("profiles").update({ theme_preference: newTheme }).eq("user_id", user.id)
+        await supabase.from("profiles").update({ theme_preference: newTheme }).eq("id", user.id)
       }
     } finally {
       setSavingAppearance(false)
@@ -276,7 +276,7 @@ export function Settings({ navigateTo, onLogout, user, onUserUpdate }: SettingsP
     setDeleteLoading(true)
     try {
       // Delete user data from profiles
-      await supabase.from("profiles").delete().eq("user_id", user.id)
+      await supabase.from("profiles").delete().eq("id", user.id)
       // Sign out
       await onLogout()
     } catch (err) {
