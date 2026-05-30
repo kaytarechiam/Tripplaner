@@ -30,12 +30,14 @@ export async function checkOpenAI(): Promise<boolean> {
 function buildBookingLinks(destination: string) {
   const q = encodeURIComponent(destination)
   return {
-    traveloka_hotels: `https://www.traveloka.com/en-id/hotel?search=${q}`,
-    traveloka_flights: `https://www.traveloka.com/en-id/flight?search=${q}`,
-    tiket_hotels: `https://www.tiket.com/hotel?q=${q}`,
-    tiket_flights: `https://www.tiket.com/penerbangan?q=${q}`,
-    agoda_hotels: `https://www.agoda.com/search?city=${q}`,
-    booking_hotels: `https://www.booking.com/searchresults.html?ss=${q}`,
+    traveloka_hotels: `https://www.traveloka.com/en/hotels/search?query=${q}`,
+    traveloka_flights: `https://www.traveloka.com/en/flights/search?query=${q}`,
+    traveloka_trains: `https://www.traveloka.com/en/trains/search?query=${q}`,
+    tiket_hotels: `https://www.tiket.com/search?query=${q}&type=hotel`,
+    tiket_flights: `https://www.tiket.com/search?query=${q}&type=flight`,
+    tiket_trains: `https://www.tiket.com/search?query=${q}&type=train`,
+    agoda_hotels: `https://www.agoda.com/pages/agoda/default/DestinationSearchResult.aspx?city=${q}`,
+    booking_hotels: `https://www.booking.com/search.html?ss=${q}`,
   }
 }
 
@@ -74,6 +76,11 @@ Return ONLY valid JSON, no markdown:
     parsed = JSON.parse(cleaned)
   } catch {
     throw new Error('Failed to parse OpenAI response as JSON: ' + cleaned.substring(0, 100))
+  }
+
+  // Validate required fields exist
+  if (!parsed.itinerary || !Array.isArray(parsed.itinerary)) {
+    throw new Error('OpenAI returned invalid itinerary structure')
   }
 
   const bookingLinks = buildBookingLinks(params.destination)
