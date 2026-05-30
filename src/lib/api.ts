@@ -1,6 +1,20 @@
-const API_BASE = import.meta.env.VITE_API_BASE as string || ''
+// Detect if running on localhost vs remote tunnel
+const isLocalDev = (
+  typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+)
 
-async function apiFetch<T = unknown>(
+// VITE_API_BASE:
+//   - dev (npm run dev:client): empty → Vite proxy /api → localhost:3001
+//   - tunnel/production: MUST be set to your backend URL
+const rawBase = import.meta.env.VITE_API_BASE as string | undefined
+const API_BASE = rawBase
+  ? rawBase
+  : isLocalDev
+    ? ''   // use Vite proxy in dev
+    : 'http://localhost:3000' // fallback: direct to backend (production/tunnel)
+
+export async function apiFetch<T = unknown>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
@@ -119,7 +133,7 @@ export interface EmailSplitBillPayload {
     split_between: string[]
   }[]
   currency: string
-  participant_emails?: string[]
+  participant_emails?: { name: string; email: string }[]
 }
 
 export interface EmailSplitBillResponse {
@@ -322,4 +336,107 @@ export async function searchFlights(
   const params = new URLSearchParams({ from, to })
   if (date) params.append("date", date)
   return apiFetch<FlightSearchResponse>(`/api/hotels/flights?${params}`)
+}
+
+// ─── Booking.com RapidAPI Search ──────────────────────────
+
+export interface BookingSearchResult {
+  name: string
+  location: string
+  rating: number
+  reviewScore: number
+  reviewCount: number
+  pricePerNight: number
+  currency: string
+  imageUrl: string
+  bookingDeepLinks: {
+    traveloka?: string
+    tiket?: string
+    agoda?: string
+    booking?: string
+  }
+  category: string
+}
+
+export interface BookingSearchResponse {
+  query: string
+  results: BookingSearchResult[]
+  currency: string
+  error?: string
+}
+
+export async function searchBooking(
+  query: string,
+  category: "hotel" | "attraction" | "flight" | "restaurant" = "hotel"
+): Promise<BookingSearchResponse> {
+  return apiFetch<BookingSearchResponse>(`/api/booking/search?query=${encodeURIComponent(query)}&category=${category}`)
+}
+
+// ─── RapidAPI Real-Time Prices ──────────────────────────────────────────────
+
+export interface RapidHotelPrice {
+  id: number
+  name: string
+  location: string
+  rating: number
+  reviewCount: number
+  price: number
+  currency: string
+  imageUrl: string | null
+  bookingUrl: string
+  cheapestPricePerNight?: number
+  currencyCode?: string
+}
+
+export interface RapidRestaurantResult {
+  id: string
+  name: string
+  rating: number
+  priceLevel: string | null
+  cuisine: string | null
+  address: string | null
+  imageUrl: string | null
+}
+
+export interface RapidStayResult {
+  id: string
+  name: string
+  location: string
+  rating: number
+  reviewCount: number
+  price: string | null
+  currency: string
+  imageUrl: string | null
+  bookingUrl: string
+}
+
+export async function searchHotelPrices(
+  location: string,
+  checkin?: string,
+  checkout?: string,
+  adults = 1
+): Promise<{ location: string; results: RapidHotelPrice[] }> {
+  const params = new URLSearchParams({ location })
+  if (checkin) params.append("checkin", checkin)
+  if (checkout) params.append("checkout", checkout)
+  params.append("adults", String(adults))
+  return apiFetch(`/api/prices/hotel?${params}`)
+}
+
+export async function searchRestaurantPrices(
+  location: string
+): Promise<{ location: string; results: RapidRestaurantResult[] }> {
+  return apiFetch(`/api/prices/restaurant?location=${encodeURIComponent(location)}`)
+}
+
+export async function searchStayPrices(
+  location: string,
+  checkin?: string,
+  checkout?: string,
+  adults = 1
+): Promise<{ location: string; results: RapidStayResult[] }> {
+  const params = new URLSearchParams({ location, adults: String(adults) })
+  if (checkin) params.append("checkin", checkin)
+  if (checkout) params.append("checkout", checkout)
+  return apiFetch(`/api/prices/stay?${params}`)
 }

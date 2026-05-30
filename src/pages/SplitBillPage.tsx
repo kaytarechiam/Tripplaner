@@ -42,6 +42,16 @@ export function SplitBillPage({ navigateTo }: SplitBillProps) {
   const [loading, setLoading] = useState(true)
   const [userTrips, setUserTrips] = useState<Trip[]>([])
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null)
+  const [showAddBill, setShowAddBill] = useState(false)
+  const [billDesc, setBillDesc] = useState("")
+  const [billAmount, setBillAmount] = useState("")
+  const [billPaidBy, setBillPaidBy] = useState("")
+  const [billSplitWith, setBillSplitWith] = useState<string[]>([])
+  const [addBillLoading, setAddBillLoading] = useState(false)
+  const [memberNames, setMemberNames] = useState<string[]>([])
+  const [newMemberName, setNewMemberName] = useState("")
+  const [participantEmails, setParticipantEmails] = useState<{ name: string; email: string }[]>([])
+
 
   // Load user's trips
   useEffect(() => {
@@ -84,11 +94,31 @@ export function SplitBillPage({ navigateTo }: SplitBillProps) {
   })
 
   const handleSendBills = async () => {
+    if (!selectedTripId || bills.length === 0) return
     setSendingEmail(true)
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    setSendingEmail(false)
-    setEmailSent(true)
-    setTimeout(() => setEmailSent(false), 3000)
+    try {
+      const { sendSplitBillEmail } = await import('../lib/api')
+      const selectedTrip = userTrips.find((t: Trip) => t.id === selectedTripId)
+      await sendSplitBillEmail({
+        trip_name: selectedTrip?.name || "Trip",
+        items: bills.map((b: SplitBillItem) => ({
+          description: b.description,
+          amount: Number(b.amount),
+          paid_by: b.paid_by,
+          split_between: b.split_between,
+        })),
+        currency: 'Rp',
+        participant_emails: participantEmails,
+      })
+      setEmailSent(true)
+      setTimeout(() => setEmailSent(false), 3000)
+    } catch (err: unknown) {
+      console.error("Send email error:", err)
+      const msg = err instanceof Error ? err.message : "Gagal kirim email"
+      alert(msg + ". Pastikan email penerima sudah diisi.")
+    } finally {
+      setSendingEmail(false)
+    }
   }
 
   const handleExportPDF = () => {
@@ -162,6 +192,143 @@ export function SplitBillPage({ navigateTo }: SplitBillProps) {
             </div>
           </div>
         )}
+        {/* Member Management + Add Bill Form */}
+        {selectedTripId && (
+          <div className="mb-6 space-y-3">
+            {/* Members management */}
+            <div className="glass-card p-4 space-y-3">
+              <h3 className="font-semibold text-sm">Anggota Trip</h3>
+              <div className="flex flex-wrap gap-2">
+                {memberNames.map(name => (
+                  <span key={name} className="px-3 py-1 bg-secondary/60 rounded-full text-sm">{name}</span>
+                ))}
+                {memberNames.length === 0 && (
+                  <span className="text-xs text-muted-foreground">Tambah anggota untuk split bill</span>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Nama anggota baru"
+                  value={newMemberName}
+                  onChange={e => setNewMemberName(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && newMemberName.trim()) {
+                      setMemberNames(prev => [...new Set([...prev, newMemberName.trim()])])
+                      setNewMemberName("")
+                    }
+                  }}
+                  className="text-sm"
+                />
+                <Button size="sm" variant="outline"
+                  onClick={() => {
+                    if (newMemberName.trim()) {
+                      setMemberNames(prev => [...new Set([...prev, newMemberName.trim()])])
+                      setNewMemberName("")
+                    }
+                  }}>
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+
+            {/* Tambah Tagihan button */}
+            <Button variant="gradient" size="sm" onClick={() => setShowAddBill(v => !v)}>
+              <Plus className="w-4 h-4 mr-1" />
+              {showAddBill ? "Tutup Form" : "Tambah Tagihan"}
+            </Button>
+
+            {/* Add Bill Form */}
+            {showAddBill && (
+              <div className="glass-card p-4 space-y-3">
+                <h3 className="font-semibold text-sm">Tagihan Baru</h3>
+                <Input placeholder="Deskripsi (mis: Makan malam)" value={billDesc}
+                  onChange={e => setBillDesc(e.target.value)} />
+                <Input type="number" placeholder="Jumlah (Rp)" value={billAmount}
+                  onChange={e => setBillAmount(e.target.value)} />
+                <select
+                  value={billPaidBy}
+                  onChange={e => setBillPaidBy(e.target.value)}
+                  className="w-full h-9 rounded-lg border border-input bg-background px-3 text-sm">
+                  <option value="">-- Siapa yang bayar? --</option>
+                  {memberNames.map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Split dengan:</p>
+                  {memberNames.map(name => (
+                    <label key={name} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input type="checkbox"
+                        checked={billSplitWith.includes(name)}
+                        onChange={e => {
+                          if (e.target.checked) setBillSplitWith(prev => [...prev, name])
+                          else setBillSplitWith(prev => prev.filter(n => n !== name))
+                        }} />
+                      {name}
+                    </label>
+                  ))}
+                  {memberNames.length === 0 && (
+                    <p className="text-xs text-muted-foreground italic">Tambah anggota dulu di atas</p>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" className="flex-1"
+                    onClick={() => setShowAddBill(false)}>Batal</Button>
+                  <Button variant="gradient" size="sm" className="flex-1"
+                    disabled={addBillLoading || !billDesc || !billAmount || !billPaidBy || billSplitWith.length === 0}
+                    onClick={async () => {
+                      if (!billDesc || !billAmount || !billPaidBy || billSplitWith.length === 0) return
+                      if (!selectedTripId) return
+                      setAddBillLoading(true)
+                      try {
+                        const { addSplitBill } = await import('../lib/supabase')
+                        const newBill = await addSplitBill({
+                          trip_id: selectedTripId,
+                          description: billDesc,
+                          amount: Number(billAmount),
+                          currency: 'IDR',
+                          paid_by: billPaidBy,
+                          split_between: billSplitWith,
+                          settled: false,
+                        })
+                        setBills((prev: SplitBillItem[]) => [...prev, newBill])
+                        setBillDesc(""); setBillAmount(""); setBillPaidBy(""); setBillSplitWith([])
+                        setShowAddBill(false)
+                      } catch (err: unknown) {
+                        console.error("Add bill error:", err)
+                      } finally {
+                        setAddBillLoading(false)
+                      }
+                    }}>
+                    {addBillLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Simpan Tagihan"}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Participant emails for sending */}
+            {memberNames.length > 0 && (
+              <div className="glass-card p-4 space-y-2">
+                <p className="text-sm font-medium">Email Anggota (untuk kirim tagihan)</p>
+                {memberNames.map(name => (
+                  <div key={name} className="flex items-center gap-2">
+                    <span className="text-sm w-24 shrink-0 text-muted-foreground">{name}:</span>
+                    <Input
+                      type="email"
+                      placeholder="email@example.com"
+                      value={participantEmails.find(p => p.name === name)?.email || ""}
+                      onChange={e => setParticipantEmails(prev => {
+                        const updated = prev.filter(p => p.name !== name)
+                        if (e.target.value) updated.push({ name, email: e.target.value })
+                        return updated
+                      })}
+                      className="text-sm"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Summary Cards */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
