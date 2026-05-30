@@ -292,7 +292,7 @@ function MainNav({
   const navItems = [
     { id: "home" as Page, label: "Dashboard", icon: Home },
     { id: "explore" as Page, label: "Explore", icon: Globe },
-    { id: "bucketlist" as Page, label: "Bucket List", icon: Heart },
+    { id: "bucketlist" as Page, label: "Trip Saya", icon: Heart },
   ]
 
   return (
