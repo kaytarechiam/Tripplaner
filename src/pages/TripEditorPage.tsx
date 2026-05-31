@@ -5,19 +5,19 @@ import {
   AlertTriangle, Sun, Cloud, CloudRain, Eye,
   Users, ArrowLeft, Search, Filter, Layers, Settings,
   Navigation, Trash2, Edit3, Copy, ExternalLink, Map as MapIcon2,
-  Loader2, X, Check, Map as MapIcon, Plane, Calendar, ChevronRight, PanelLeftClose, Sparkles, Ticket
+  Loader2, X, Check, Map as MapIcon, Plane, Calendar, ChevronRight, PanelLeftClose, Sparkles, Ticket,
+  CloudSun
 } from "lucide-react"
 import { Button } from "../components/ui/button"
 import { Badge } from "../components/ui/badge"
 import { Avatar, AvatarFallback } from "../components/ui/avatar"
-import { Progress } from "../components/ui/progress"
 import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog"
-import { cn, formatDistance, formatDuration } from "@/lib/utils"
+import { cn } from "@/lib/utils"
 import { useState, useEffect, useRef, useCallback } from "react"
 import { getTrips, createTrip, getItinerary, addItineraryItem, updateTrip, getTripMembers, inviteTripMember } from "../lib/supabase"
-import { searchPlaces } from "../lib/api"
+import { searchPlaces, getWeather } from "../lib/api"
 import { TripMap } from "../components/TripMap"
 import { TripAIPanel } from "../components/TripAIPanel"
 import { PlaceDetailModal } from "../components/PlaceDetailModal"
@@ -27,7 +27,9 @@ import type { Trip, ItineraryItem, TripMember } from "../lib/supabase"
 // ─── Destination types map ────────────────────────────────
 const destinationTypes: Record<string, { icon: typeof MapPin; color: string }> = {
   hotel: { icon: Hotel, color: "from-blue-400 to-cyan-400" },
+  accommodation: { icon: Hotel, color: "from-blue-400 to-cyan-400" },
   landmark: { icon: Landmark, color: "from-sunset-400 to-coral-500" },
+  attraction: { icon: Landmark, color: "from-violet-400 to-purple-400" },
   food: { icon: Utensils, color: "from-orange-400 to-amber-400" },
   nature: { icon: TreePine, color: "from-emerald-400 to-green-400" },
   activity: { icon: Camera, color: "from-pink-400 to-rose-400" },
@@ -35,7 +37,18 @@ const destinationTypes: Record<string, { icon: typeof MapPin; color: string }> =
   transport: { icon: MapIcon2, color: "from-gray-400 to-gray-500" },
 }
 
-function getWeatherEmoji(dayIndex: number): string { return [Sun, Cloud, CloudRain][dayIndex % 3].name === "CloudRain" ? "🌧️" : [Sun, Cloud, CloudRain][dayIndex % 3].name === "Cloud" ? "⛅" : "☀️" }
+// Weather helpers
+function getWeatherIcon(code: number): string {
+  if (code === 0) return "☀️"
+  if (code <= 2) return "⛅"
+  if (code === 3) return "☁️"
+  if (code >= 45 && code <= 48) return "🌫️"
+  if (code >= 51 && code <= 67) return "🌧️"
+  if (code >= 71 && code <= 77) return "❄️"
+  if (code >= 80 && code <= 82) return "🌧️"
+  if (code >= 95) return "⛈️"
+  return "🌤️"
+}
 
 // ─── Get booking platforms for an item ─────────────────────
 function getBookingPlatforms(item: ItineraryItem) {
@@ -46,40 +59,28 @@ function getBookingPlatforms(item: ItineraryItem) {
 
   const platforms: Array<{ id: string; name: string; url: string; color: string }> = []
 
-  if (category === "hotel") {
+  if (category === "hotel" || category === "accommodation") {
     platforms.push(
       { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/hotels/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700" },
       { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${query}&type=hotel`, color: "bg-[#f97316] hover:bg-[#ea580c]" },
       { id: "agoda", name: "Agoda", url: `https://www.agoda.com/search?locale=en-us&currency=IDR&pricenext=1&query=${query}`, color: "bg-[#dd1f39] hover:bg-[#b71c1c]" },
       { id: "booking", name: "Booking.com", url: `https://www.booking.com/search.html?ss=${query}`, color: "bg-[#003580] hover:bg-[#00224f]" }
     )
-  } else if (category === "transport" && (title.includes("flight") || title.includes("penerbangan") || title.includes("pesawat") || title.includes("plane") || title.includes("bandara"))) {
+  } else if (category === "transport" && (title.includes("flight") || title.includes("pesawat") || title.includes("penerbangan"))) {
     platforms.push(
       { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/flights/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700" },
       { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${query}&type=flight`, color: "bg-[#f97316] hover:bg-[#ea580c]" }
     )
-  } else if (category === "transport" && (title.includes("kereta") || title.includes("train") || title.includes("kereta api"))) {
-    platforms.push(
-      { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/trains/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700" },
-      { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${query}&type=train`, color: "bg-[#f97316] hover:bg-[#ea580c]" }
-    )
-  } else if (category === "transport" && (title.includes("bus"))) {
-    platforms.push(
-      { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/buses/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700" },
-      { id: "tiket", name: "Tiket.com", url: `https://www.tiket.com/search?query=${query}&type=bus`, color: "bg-[#f97316] hover:bg-[#ea580c]" }
-    )
   } else if (category === "food") {
-    // Most platforms don't have restaurant booking; Booking.com has some restaurant reservations
     platforms.push(
-      { id: "booking", name: "Booking.com", url: `https://www.booking.com/search.html?ss=${query}`, color: "bg-[#003580] hover:bg-[#00224f]" },
-      { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/flights/search?query=${query}`, color: "bg-blue-600 hover:bg-blue-700" }
+      { id: "booking", name: "Booking.com", url: `https://www.booking.com/search.html?ss=${query}`, color: "bg-[#003580] hover:bg-[#00224f]" }
     )
   }
 
   return platforms
 }
 
-// ─── Destination Card (from real data) ────────────────────
+// ─── Destination Card ─────────────────────────────────────
 function DestinationCard({ item, dayIndex, index, onSelect }: { item: ItineraryItem; dayIndex: number; index: number; onSelect: (item: ItineraryItem) => void }) {
   const type = destinationTypes[item.category] || destinationTypes.landmark
   const Icon = type.icon
@@ -111,9 +112,9 @@ function DestinationCard({ item, dayIndex, index, onSelect }: { item: ItineraryI
               <h4 className="font-semibold text-base">{item.title}</h4>
             </div>
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button className="p-1 rounded hover:bg-white/10" onClick={(e) => { e.stopPropagation() }}><Edit3 className="w-4 h-4 text-muted-foreground" /></button>
-              <button className="p-1 rounded hover:bg-white/10" onClick={(e) => { e.stopPropagation() }}><Copy className="w-4 h-4 text-muted-foreground" /></button>
-              <button className="p-1 rounded hover:bg-red-500/10" onClick={(e) => { e.stopPropagation() }}><Trash2 className="w-4 h-4 text-red-400" /></button>
+              <button className="p-1 rounded hover:bg-white/10" onClick={(e) => e.stopPropagation()}><Edit3 className="w-4 h-4 text-muted-foreground" /></button>
+              <button className="p-1 rounded hover:bg-white/10" onClick={(e) => e.stopPropagation()}><Copy className="w-4 h-4 text-muted-foreground" /></button>
+              <button className="p-1 rounded hover:bg-red-500/10" onClick={(e) => e.stopPropagation()}><Trash2 className="w-4 h-4 text-red-400" /></button>
             </div>
           </div>
 
@@ -132,7 +133,6 @@ function DestinationCard({ item, dayIndex, index, onSelect }: { item: ItineraryI
           </div>
           {item.notes && <p className="text-sm text-muted-foreground">{item.notes}</p>}
 
-          {/* Booking buttons - shown on hover */}
           {bookingPlatforms.length > 0 && (
             <div className="opacity-0 group-hover:opacity-100 transition-opacity flex flex-wrap gap-2 mt-3">
               {bookingPlatforms.map((platform) => (
@@ -155,15 +155,263 @@ function DestinationCard({ item, dayIndex, index, onSelect }: { item: ItineraryI
   )
 }
 
-function ConflictWarning({ type, message }: { type: string; message: string }) {
+// ─── Add Place Modal ──────────────────────────────────────
+interface AddPlaceModalProps {
+  open: boolean
+  onClose: () => void
+  tripId: string
+  tripDays: number
+  defaultDay?: number
+  onAdded: () => void
+  prefill?: { name: string; location: string; lat: string; lon: string } | null
+}
+
+const CATEGORIES = [
+  { value: "hotel", label: "🏨 Hotel", dbValue: "accommodation" },
+  { value: "food", label: "🍜 Restoran / Makanan", dbValue: "food" },
+  { value: "landmark", label: "🏛️ Landmark / Wisata", dbValue: "attraction" },
+  { value: "nature", label: "🌿 Alam / Taman", dbValue: "attraction" },
+  { value: "activity", label: "🎯 Aktivitas", dbValue: "attraction" },
+  { value: "shopping", label: "🛍️ Belanja", dbValue: "attraction" },
+  { value: "transport", label: "🚗 Transport", dbValue: "transport" },
+]
+
+function AddPlaceModal({ open, onClose, tripId, tripDays, defaultDay = 1, onAdded, prefill }: AddPlaceModalProps) {
+  const [name, setName] = useState("")
+  const [category, setCategory] = useState("activity")
+  const [day, setDay] = useState(defaultDay)
+  const [time, setTime] = useState("09:00")
+  const [location, setLocation] = useState("")
+  const [notes, setNotes] = useState("")
+  const [duration, setDuration] = useState(60)
+  const [lat, setLat] = useState<number | null>(null)
+  const [lng, setLng] = useState<number | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState("")
+  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [showSearch, setShowSearch] = useState(false)
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Apply prefill when it changes
+  useEffect(() => {
+    if (prefill) {
+      setName(prefill.name)
+      setLocation(prefill.location)
+      setLat(parseFloat(prefill.lat) || null)
+      setLng(parseFloat(prefill.lon) || null)
+      setSearchQuery(prefill.name)
+    }
+  }, [prefill])
+
+  const handleSearchChange = (val: string) => {
+    setSearchQuery(val)
+    setName(val)
+    if (searchTimeout.current) clearTimeout(searchTimeout.current)
+    if (val.length < 2) { setSearchResults([]); setShowSearch(false); return }
+    searchTimeout.current = setTimeout(async () => {
+      try {
+        const res = await searchPlaces(val)
+        setSearchResults(res)
+        setShowSearch(true)
+      } catch { setSearchResults([]) }
+    }, 300)
+  }
+
+  const handleSelectResult = (r: any) => {
+    const displayName = r.display_name.split(",")[0].trim()
+    setName(displayName)
+    setSearchQuery(displayName)
+    setLocation(r.display_name.substring(0, 120))
+    setLat(parseFloat(r.lat) || null)
+    setLng(parseFloat(r.lon) || null)
+    setShowSearch(false)
+    setSearchResults([])
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!name.trim()) { setError("Nama tempat wajib diisi"); return }
+    setLoading(true)
+    setError("")
+    try {
+      await addItineraryItem({
+        trip_id: tripId,
+        day,
+        time,
+        title: name.trim(),
+        location: location.trim() || undefined,
+        latitude: lat || undefined,
+        longitude: lng || undefined,
+        category: category as any,  // addItineraryItem maps to DB values internally
+        duration_minutes: duration,
+        notes: notes.trim() || undefined,
+        sort_order: 999,
+      })
+      onAdded()
+      onClose()
+      // Reset
+      setName(""); setSearchQuery(""); setLocation(""); setLat(null); setLng(null)
+      setNotes(""); setTime("09:00"); setDuration(60); setDay(defaultDay); setCategory("activity")
+    } catch (err: any) {
+      setError(err.message || "Gagal menambahkan tempat")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (!open) return null
+
+  const maxDay = Math.max(tripDays, 1)
+
   return (
-    <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="conflict-warning">
-      <AlertTriangle className="w-5 h-5 text-[var(--coral-accent)] shrink-0 mt-0.5" />
-      <div>
-        <p className="font-medium text-sm">{type}</p>
-        <p className="text-sm text-muted-foreground">{message}</p>
-      </div>
-    </motion.div>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        className="bg-background rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto"
+      >
+        <div className="p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-lg flex items-center gap-2">
+              <Plus className="w-5 h-5 text-[var(--aurora-start)]" />
+              Tambah Tempat
+            </h3>
+            <button onClick={onClose} className="p-2 rounded-lg hover:bg-white/10">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Search / Name */}
+            <div className="space-y-1 relative">
+              <Label>Cari & Nama Tempat *</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10" />
+                <Input
+                  placeholder="Ketik nama tempat untuk cari..."
+                  className="pl-10"
+                  value={searchQuery}
+                  onChange={e => handleSearchChange(e.target.value)}
+                  onFocus={() => searchResults.length > 0 && setShowSearch(true)}
+                />
+              </div>
+              {showSearch && searchResults.length > 0 && (
+                <div className="absolute z-50 w-full bg-white border border-border rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                  {searchResults.slice(0, 5).map(r => (
+                    <button
+                      key={r.place_id}
+                      type="button"
+                      onMouseDown={() => handleSelectResult(r)}
+                      className="w-full text-left px-3 py-2.5 hover:bg-muted/60 transition-colors flex items-start gap-2 border-b border-border/40 last:border-0"
+                    >
+                      <MapPin className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium truncate">{r.display_name.split(",")[0]}</div>
+                        <div className="text-xs text-muted-foreground truncate">{r.display_name.split(",").slice(1, 3).join(",").trim()}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Category */}
+            <div className="space-y-1">
+              <Label>Kategori</Label>
+              <div className="grid grid-cols-2 gap-1.5">
+                {CATEGORIES.map(c => (
+                  <button
+                    key={c.value}
+                    type="button"
+                    onClick={() => setCategory(c.value)}
+                    className={cn(
+                      "text-left px-3 py-2 rounded-lg text-sm transition-all border",
+                      category === c.value
+                        ? "bg-gradient-to-r from-[var(--aurora-start)]/10 to-[var(--aurora-end)]/10 border-[var(--aurora-start)]/40 font-medium"
+                        : "border-transparent hover:bg-secondary/60"
+                    )}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Day + Time row */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Hari ke-</Label>
+                <select
+                  value={day}
+                  onChange={e => setDay(Number(e.target.value))}
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                >
+                  {Array.from({ length: maxDay }, (_, i) => i + 1).map(d => (
+                    <option key={d} value={d}>Hari {d}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label>Waktu</Label>
+                <Input type="time" value={time} onChange={e => setTime(e.target.value)} />
+              </div>
+            </div>
+
+            {/* Location (auto-filled from search) */}
+            {location && (
+              <div className="space-y-1">
+                <Label>Lokasi / Alamat</Label>
+                <Input
+                  value={location}
+                  onChange={e => setLocation(e.target.value)}
+                  placeholder="Alamat atau nama lokasi"
+                />
+              </div>
+            )}
+
+            {/* Duration */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <Label>Durasi</Label>
+                <span className="text-xs text-muted-foreground">{duration >= 60 ? `${Math.floor(duration / 60)} jam ${duration % 60 > 0 ? `${duration % 60} mnt` : ''}` : `${duration} mnt`}</span>
+              </div>
+              <input
+                type="range" min="15" max="480" step="15"
+                value={duration}
+                onChange={e => setDuration(Number(e.target.value))}
+                className="w-full accent-[var(--aurora-start)]"
+              />
+            </div>
+
+            {/* Notes */}
+            <div className="space-y-1">
+              <Label>Catatan <span className="text-muted-foreground font-normal">(opsional)</span></Label>
+              <textarea
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                placeholder="Tips, info tiket, booking link, dll..."
+                className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm resize-none"
+                rows={2}
+              />
+            </div>
+
+            {error && <p className="text-xs text-red-500 bg-red-50 p-2 rounded-lg">{error}</p>}
+
+            <div className="flex gap-2 pt-1">
+              <Button type="button" variant="outline" className="flex-1" onClick={onClose}>Batal</Button>
+              <Button type="submit" variant="gradient" className="flex-1" disabled={loading}>
+                {loading ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Plus className="w-4 h-4 mr-1" />}
+                Tambahkan
+              </Button>
+            </div>
+          </form>
+        </div>
+      </motion.div>
+    </div>
   )
 }
 
@@ -214,9 +462,7 @@ function CreateTripModal({ onCreated }: { onCreated: (trip: Trip) => void }) {
       setForm({ name: "", destination: "", start_date: "", end_date: "" })
       setOpen(false)
     } catch (err: any) {
-      console.error('[createTrip]', err)
-      const msg = err?.message || err?.error?.message || err?.error?.msg || JSON.stringify(err)
-      setError(msg)
+      setError(err?.message || JSON.stringify(err))
     } finally {
       setIsLoading(false)
     }
@@ -272,7 +518,7 @@ function CreateTripModal({ onCreated }: { onCreated: (trip: Trip) => void }) {
   )
 }
 
-// ─── Day data derived from real itinerary items ───────────
+// ─── Day group ────────────────────────────────────────────
 interface DayGroup {
   day: number
   date: string
@@ -309,21 +555,31 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
   const [itemsLoading, setItemsLoading] = useState(false)
   const [selectedDay, setSelectedDay] = useState(0)
   const [mapView, setMapView] = useState<"day" | "full">("day")
-  const [searchQuery, setSearchQuery] = useState("")
   const [showTripList, setShowTripList] = useState(true)
   const [aiPanelOpen, setAiPanelOpen] = useState(false)
   const [selectedItem, setSelectedItem] = useState<ItineraryItem | null>(null)
-  // Member invitation
+  const [addPlaceOpen, setAddPlaceOpen] = useState(false)
+  const [addPrefill, setAddPrefill] = useState<{ name: string; location: string; lat: string; lon: string } | null>(null)
+
+  // Place search state
+  const [placeQuery, setPlaceQuery] = useState("")
+  const [placeSuggestions, setPlaceSuggestions] = useState<any[]>([])
+  const [showPlaceSuggestions, setShowPlaceSuggestions] = useState(false)
+  const placeSearchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Weather state
+  const [weather, setWeather] = useState<any[]>([])
+  const [weatherLoading, setWeatherLoading] = useState(false)
+
+  // Member state
   const [showMemberDialog, setShowMemberDialog] = useState(false)
   const [members, setMembers] = useState<TripMember[]>([])
   const [inviteEmail, setInviteEmail] = useState("")
   const [inviteLoading, setInviteLoading] = useState(false)
   const [inviteError, setInviteError] = useState("")
   const [inviteSuccess, setInviteSuccess] = useState("")
-  // Make public toggle
   const [togglingPublic, setTogglingPublic] = useState(false)
 
-  // Refresh itinerary items from DB
   const refreshItems = useCallback(() => {
     if (!selectedTrip) return
     getItinerary(selectedTrip.id)
@@ -358,6 +614,65 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
     getTripMembers(selectedTrip.id).then(setMembers).catch(() => setMembers([]))
   }, [selectedTrip?.id])
 
+  // Fetch weather when trip + destination change
+  useEffect(() => {
+    if (!selectedTrip?.destination || !selectedTrip.start_date) {
+      setWeather([])
+      return
+    }
+
+    const fetchWeather = async () => {
+      setWeatherLoading(true)
+      try {
+        // Geocode destination → get lat/lng
+        const places = await searchPlaces(selectedTrip.destination)
+        if (!places.length) return
+
+        const { lat, lon } = places[0]
+        const tripDays = selectedTrip.end_date
+          ? Math.ceil((new Date(selectedTrip.end_date).getTime() - new Date(selectedTrip.start_date!).getTime()) / 86400000) + 1
+          : 7
+
+        const weatherData = await getWeather(parseFloat(lat), parseFloat(lon), Math.min(tripDays, 14))
+        setWeather(weatherData)
+      } catch {
+        setWeather([])
+      } finally {
+        setWeatherLoading(false)
+      }
+    }
+
+    fetchWeather()
+  }, [selectedTrip?.id, selectedTrip?.destination, selectedTrip?.start_date])
+
+  // Place search handler
+  const handlePlaceSearch = (val: string) => {
+    setPlaceQuery(val)
+    setShowPlaceSuggestions(false)
+    if (placeSearchTimeout.current) clearTimeout(placeSearchTimeout.current)
+    if (val.length < 2) { setPlaceSuggestions([]); return }
+    placeSearchTimeout.current = setTimeout(async () => {
+      try {
+        const res = await searchPlaces(val)
+        setPlaceSuggestions(res)
+        setShowPlaceSuggestions(true)
+      } catch { setPlaceSuggestions([]) }
+    }, 300)
+  }
+
+  const handleSelectPlace = (s: any) => {
+    setAddPrefill({
+      name: s.display_name.split(",")[0].trim(),
+      location: s.display_name.substring(0, 120),
+      lat: s.lat,
+      lon: s.lon,
+    })
+    setPlaceQuery("")
+    setShowPlaceSuggestions(false)
+    setPlaceSuggestions([])
+    setAddPlaceOpen(true)
+  }
+
   const handleTripCreated = useCallback((trip: Trip) => {
     setTrips(prev => [trip, ...prev])
     setSelectedTrip(trip)
@@ -373,7 +688,6 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
       await inviteTripMember(selectedTrip.id, inviteEmail.trim(), selectedTrip.name)
       setInviteSuccess(`Undangan dikirim ke ${inviteEmail}!`)
       setInviteEmail("")
-      // Refresh members
       const updated = await getTripMembers(selectedTrip.id)
       setMembers(updated)
     } catch (err: any) {
@@ -400,7 +714,7 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
   const dayGroups = groupItemsByDay(itineraryItems)
   const currentDay = dayGroups[selectedDay]
 
-  // Map locations for TripMap
+  // Map locations
   const mapLocations = (mapView === "day" && currentDay ? currentDay.items : itineraryItems)
     .filter(d => d.latitude && d.longitude)
     .map((d, i) => ({
@@ -412,31 +726,25 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
       time: d.time,
     }))
 
-  // Stats from real data
   const totalDestinations = itineraryItems.length
+
+  // Trip days for AddPlaceModal
+  const tripDays = selectedTrip?.start_date && selectedTrip?.end_date
+    ? Math.max(1, Math.ceil((new Date(selectedTrip.end_date).getTime() - new Date(selectedTrip.start_date).getTime()) / 86400000) + 1)
+    : Math.max(dayGroups.length, 1)
 
   return (
     <div className="h-screen flex overflow-hidden">
-      {/* ── Left Sidebar — collapsible, scrolling independent ── */}
+      {/* ── Left Sidebar ── */}
       <div className={`
         shrink-0 border-r border-border flex flex-col bg-background/50 backdrop-blur-sm h-screen
         transition-all duration-300 ease-out
         ${sidebarCollapsed ? "w-0 overflow-hidden" : "w-[420px]"}
       `}>
         {/* Sidebar Header */}
-        <div className={`
-          p-4 border-b border-border space-y-3
-          ${sidebarCollapsed ? "hidden" : ""}
-        `}>
+        <div className={`p-4 border-b border-border space-y-3 ${sidebarCollapsed ? "hidden" : ""}`}>
           <div className="flex items-center gap-3">
-            {/* Toggle button */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="shrink-0"
-              onClick={onToggleSidebar}
-              aria-label={sidebarCollapsed ? "Perluas sidebar" : "Persempit sidebar"}
-            >
+            <Button variant="ghost" size="icon" className="shrink-0" onClick={onToggleSidebar}>
               <ChevronRight className={`w-4 h-4 transition-transform duration-300 ${sidebarCollapsed ? "" : "rotate-180"}`} />
             </Button>
             <div className="flex-1 min-w-0">
@@ -457,7 +765,6 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
             )}
           </div>
           <CreateTripModal onCreated={handleTripCreated} />
-          {/* Make Public + Invite Members row */}
           {selectedTrip && (
             <div className="flex items-center gap-2 pt-1">
               <button
@@ -483,7 +790,8 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
             </div>
           )}
         </div>
-        {/* Member Invitation Dialog */}
+
+        {/* Member Dialog */}
         {showMemberDialog && selectedTrip && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
             <div className="bg-background rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
@@ -494,25 +802,16 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
                 </button>
               </div>
               <p className="text-sm text-muted-foreground">Undang teman ke "{selectedTrip.name}" via email</p>
-
-              {/* Invite form */}
               <div className="flex gap-2">
-                <Input
-                  type="email"
-                  placeholder="email@teman.com"
-                  value={inviteEmail}
+                <Input type="email" placeholder="email@teman.com" value={inviteEmail}
                   onChange={e => { setInviteEmail(e.target.value); setInviteError(""); setInviteSuccess("") }}
-                  onKeyDown={e => e.key === 'Enter' && handleInviteMember()}
-                  className="flex-1 text-sm"
-                />
+                  onKeyDown={e => e.key === 'Enter' && handleInviteMember()} className="flex-1 text-sm" />
                 <Button variant="gradient" size="sm" onClick={handleInviteMember} disabled={inviteLoading || !inviteEmail.trim()}>
                   {inviteLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                 </Button>
               </div>
               {inviteError && <p className="text-xs text-red-500">{inviteError}</p>}
               {inviteSuccess && <p className="text-xs text-emerald-500">{inviteSuccess}</p>}
-
-              {/* Current members */}
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 <p className="text-xs font-medium text-muted-foreground">ANGGOTA SAAT INI</p>
                 {members.length === 0 ? (
@@ -547,7 +846,7 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
           <div className="p-6 text-center text-sm text-muted-foreground">
             <MapIcon className="w-10 h-10 mx-auto mb-3 opacity-20" />
             <p className="font-medium mb-1">Belum ada trip</p>
-            <p className="text-xs opacity-70">Buat trip pertamamu dengan tombol di atas, atau generate dengan AI!</p>
+            <p className="text-xs opacity-70">Buat trip pertamamu dengan tombol di atas!</p>
           </div>
         ) : (
           <div className="p-4 border-b border-border">
@@ -562,16 +861,13 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
                 <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} className="overflow-hidden">
                   <div className="space-y-2 max-h-48 overflow-y-auto">
                     {trips.map(trip => (
-                      <button
-                        key={trip.id}
-                        onClick={() => setSelectedTrip(trip)}
+                      <button key={trip.id} onClick={() => setSelectedTrip(trip)}
                         className={cn(
                           "w-full text-left px-3 py-2 rounded-xl text-sm transition-all",
                           selectedTrip?.id === trip.id
                             ? "bg-gradient-to-r from-[var(--aurora-start)]/10 to-[var(--aurora-end)]/10 border border-[var(--aurora-start)]/30"
                             : "hover:bg-white/5"
-                        )}
-                      >
+                        )}>
                         <div className="font-medium">{trip.name}</div>
                         <div className="text-xs text-muted-foreground flex items-center gap-1">
                           <MapPin className="w-3 h-3" />{trip.destination}
@@ -585,18 +881,95 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
           </div>
         )}
 
-        {/* Search & Filter */}
-        <div className="p-4 border-b border-border space-y-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input placeholder="Cari destinasi..." className="pl-10" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+        {/* Place Search Bar */}
+        {selectedTrip && (
+          <div className="p-4 border-b border-border">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10" />
+              <Input
+                placeholder="🔍 Cari tempat untuk ditambahkan..."
+                className="pl-10 pr-10"
+                value={placeQuery}
+                onChange={e => handlePlaceSearch(e.target.value)}
+                onFocus={() => placeSuggestions.length > 0 && setShowPlaceSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowPlaceSuggestions(false), 200)}
+              />
+              {placeQuery && (
+                <button onClick={() => { setPlaceQuery(""); setPlaceSuggestions([]); setShowPlaceSuggestions(false) }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+              {showPlaceSuggestions && placeSuggestions.length > 0 && (
+                <div className="absolute z-50 w-full top-full mt-1 bg-white border border-border rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                  {placeSuggestions.slice(0, 6).map(s => (
+                    <button key={s.place_id} type="button" onMouseDown={() => handleSelectPlace(s)}
+                      className="w-full text-left px-3 py-3 hover:bg-muted/60 transition-colors flex items-start gap-2 border-b border-border/40 last:border-0">
+                      <MapPin className="w-4 h-4 text-[var(--aurora-start)] shrink-0 mt-0.5" />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium truncate">{s.display_name.split(",")[0]}</div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {s.display_name.split(",").slice(1, 3).join(",").trim()}
+                        </div>
+                      </div>
+                      <span className="text-xs text-[var(--aurora-start)] shrink-0 self-center">+ Tambah</span>
+                    </button>
+                  ))}
+                  <button
+                    onMouseDown={() => { setAddPrefill(null); setAddPlaceOpen(true); setShowPlaceSuggestions(false) }}
+                    className="w-full text-left px-3 py-2.5 text-sm text-[var(--aurora-start)] hover:bg-blue-50/50 flex items-center gap-2 font-medium"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Tambah "{placeQuery}" manual
+                  </button>
+                </div>
+              )}
+            </div>
+            {/* Quick add button */}
+            <button
+              onClick={() => { setAddPrefill(null); setAddPlaceOpen(true) }}
+              className="mt-2 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-medium bg-secondary/50 hover:bg-secondary/80 transition-all text-muted-foreground"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Tambah tempat manual
+            </button>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <Button variant="ghost" size="sm" className="text-xs"><Filter className="w-3 h-3 mr-1" />Filter</Button>
-          </div>
-        </div>
+        )}
 
-        {/* Day Tabs (from real data) */}
+        {/* Weather Section */}
+        {selectedTrip?.start_date && (
+          <div className="px-4 py-3 border-b border-border">
+            <div className="flex items-center gap-2 mb-2">
+              <CloudSun className="w-4 h-4 text-amber-400" />
+              <span className="text-xs font-medium text-muted-foreground">PRAKIRAAN CUACA — {selectedTrip.destination}</span>
+            </div>
+            {weatherLoading ? (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="w-3 h-3 animate-spin" /> Memuat cuaca...
+              </div>
+            ) : weather.length > 0 ? (
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {weather.slice(0, 7).map((w: any, i: number) => (
+                  <div key={i} className="flex flex-col items-center min-w-[44px] bg-secondary/30 rounded-lg p-1.5">
+                    <span className="text-[10px] text-muted-foreground font-medium">
+                      {new Date(w.date).toLocaleDateString("id-ID", { day: "2-digit", month: "short" })}
+                    </span>
+                    <span className="text-lg my-0.5">{getWeatherIcon(w.weather_code)}</span>
+                    <span className="text-xs font-bold">{w.temp_max}°</span>
+                    <span className="text-[10px] text-muted-foreground">{w.temp_min}°</span>
+                    {w.precipitation_probability > 50 && (
+                      <span className="text-[9px] text-blue-400">💧{w.precipitation_probability}%</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">Data cuaca tidak tersedia untuk destinasi ini</p>
+            )}
+          </div>
+        )}
+
+        {/* Day Tabs */}
         {dayGroups.length > 0 && (
           <div className="p-4 border-b border-border">
             <div className="flex gap-2 overflow-x-auto pb-1">
@@ -607,6 +980,9 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
                 )}>
                   <span className="text-xs font-medium">Hari {dg.day}</span>
                   <span className="text-[10px] opacity-70">{dg.items.length} item{dg.items.length !== 1 ? "s" : ""}</span>
+                  {weather[i] && (
+                    <span className="text-[10px]">{getWeatherIcon(weather[i].weather_code)} {weather[i].temp_max}°</span>
+                  )}
                 </button>
               ))}
             </div>
@@ -626,31 +1002,31 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
               ))}
             </>
           ) : trips.length > 0 && selectedTrip ? (
-            /* No itinerary items yet */
             <div className="text-center py-8 text-muted-foreground">
               <MapIcon className="w-10 h-10 mx-auto mb-3 opacity-20" />
               <p className="text-sm font-medium mb-1">Belum ada itinerary</p>
-              <p className="text-xs opacity-70 mb-4">Generate itinerary dengan AI atau tambah manual</p>
+              <p className="text-xs opacity-70 mb-4">Generate dengan AI atau tambah manual di atas</p>
               <Button variant="gradient" size="sm" className="gap-2 shadow-lg shadow-purple-500/30" onClick={() => navigateTo("ai")}>
-                <Sparkles className="w-4 h-4" />
-                ✨ Generate dengan AI
+                <Sparkles className="w-4 h-4" />✨ Generate dengan AI
               </Button>
             </div>
           ) : (
-            /* No trip selected */
             <div className="text-center py-8 text-muted-foreground">
               <MapIcon className="w-10 h-10 mx-auto mb-3 opacity-20" />
               <p className="text-sm">Pilih atau buat trip untuk mulai</p>
             </div>
           )}
 
-          {currentDay && currentDay.items.length > 0 && (
-            <Button variant="glass" className="w-full" size="lg">
-              <Plus className="w-4 h-4 mr-2" />Tambah Destinasi
-            </Button>
+          {currentDay && currentDay.items.length > 0 && selectedTrip && (
+            <button
+              onClick={() => { setAddPrefill(null); setAddPlaceOpen(true) }}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed border-[var(--aurora-start)]/30 hover:border-[var(--aurora-start)]/60 hover:bg-[var(--aurora-start)]/5 transition-all text-sm text-muted-foreground hover:text-[var(--aurora-start)]"
+            >
+              <Plus className="w-4 h-4" />
+              Tambah Destinasi ke Hari {dayGroups[selectedDay]?.day || 1}
+            </button>
           )}
 
-          {/* Reminder Panel */}
           {selectedTrip && (
             <div className="pt-4 border-t border-border/50">
               <ReminderPanel tripId={selectedTrip.id} />
@@ -658,7 +1034,7 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
           )}
         </div>
 
-        {/* Bottom Stats (from real data) */}
+        {/* Bottom Stats */}
         {dayGroups.length > 0 && (
           <div className="p-4 border-t border-border bg-card/50">
             <div className="grid grid-cols-2 gap-4 text-center">
@@ -667,9 +1043,7 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
                 <div className="text-xs text-muted-foreground">Destinasi</div>
               </div>
               <div>
-                <div className="text-lg font-bold text-[var(--coral-accent)]">
-                  {dayGroups.length} hari
-                </div>
+                <div className="text-lg font-bold text-[var(--coral-accent)]">{dayGroups.length} hari</div>
                 <div className="text-xs text-muted-foreground">Total Trip</div>
               </div>
             </div>
@@ -679,37 +1053,20 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
 
       {/* ── Right — Map ── */}
       <div className="flex-1 relative h-screen overflow-hidden">
-        {/* Deep aurora gradient background — prevents clash with white floating navbar */}
         <div className="absolute inset-0 bg-gradient-to-br from-[#0f0f1a] via-[#1a1a2e] to-[#0f1729]" />
 
-        {/* Floating controls — z-10 above gradient + map */}
+        {/* Floating controls */}
         <div className="absolute top-4 left-4 right-4 z-10 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            {/* Back to dashboard */}
-            <Button
-              variant="glass"
-              size="sm"
-              onClick={() => navigateTo("home")}
-              aria-label="Kembali ke dashboard"
-            >
+            <Button variant="glass" size="sm" onClick={() => navigateTo("home")}>
               <ArrowLeft className="w-4 h-4" />
               <span className="ml-1 text-sm hidden sm:inline">Kembali</span>
             </Button>
-
-            {/* Sidebar toggle */}
-            <Button
-              variant="glass"
-              size="sm"
-              onClick={onToggleSidebar}
-              aria-label={sidebarCollapsed ? "Perluas sidebar" : "Persempit sidebar"}
-              className={sidebarCollapsed ? "bg-white/20" : ""}
-            >
+            <Button variant="glass" size="sm" onClick={onToggleSidebar} className={sidebarCollapsed ? "bg-white/20" : ""}>
               <PanelLeftClose className="w-4 h-4" />
               <span className="ml-1 text-sm hidden sm:inline">{sidebarCollapsed ? "Sidebar" : "Sembunyikan"}</span>
             </Button>
-
             <div className="h-5 w-px bg-white/20 hidden sm:block" />
-
             <Button variant="glass" size="sm" className={mapView === "day" ? "bg-white/20" : ""} onClick={() => setMapView("day")}>
               <Layers className="w-4 h-4 mr-1" />Hari Ini
             </Button>
@@ -727,30 +1084,39 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
         {/* Map or empty state */}
         {selectedTrip && mapLocations.length > 0 ? (
           <div className="absolute inset-0 z-0">
-            <TripMap
-              locations={mapLocations}
-              height="100%"
-              zoom={13}
-            />
+            <TripMap locations={mapLocations} height="100%" zoom={13} />
           </div>
         ) : (
           <div className="absolute inset-0 z-0 flex flex-col items-center justify-center text-white/60">
             <MapIcon className="w-16 h-16 mb-4 opacity-30" />
             <p className="text-lg font-medium">{selectedTrip ? "Belum ada lokasi di peta" : "Pilih trip untuk melihat peta"}</p>
             <p className="text-sm text-white/40 mt-1">
-              {selectedTrip ? "Tambah destinasi atau generate dengan AI" : "Atau buat trip baru untuk memulai"}
+              {selectedTrip ? "Cari dan tambah destinasi, atau generate dengan AI" : "Atau buat trip baru untuk memulai"}
             </p>
             {selectedTrip && (
               <Button variant="gradient" size="sm" className="mt-4 gap-2 shadow-lg shadow-purple-500/30" onClick={() => navigateTo("ai")}>
-                <Sparkles className="w-4 h-4" />
-                ✨ Generate dengan AI
+                <Sparkles className="w-4 h-4" />✨ Generate dengan AI
               </Button>
             )}
           </div>
         )}
 
-        {/* AI FAB Button — floating bottom-right, z-20 above everything */}
-        <div className="absolute bottom-6 right-6 z-20">
+        {/* TWO FABs at bottom-right */}
+        <div className="absolute bottom-6 right-6 z-20 flex flex-col gap-3">
+          {/* Add Place FAB */}
+          {selectedTrip && (
+            <Button
+              variant="glass"
+              size="lg"
+              className="rounded-2xl shadow-lg flex items-center gap-2 h-12 px-5 bg-white/20 hover:bg-white/30 text-white border-white/30"
+              onClick={() => { setAddPrefill(null); setAddPlaceOpen(true) }}
+            >
+              <Plus className="w-5 h-5" />
+              <span className="font-semibold">Tambah Tempat</span>
+            </Button>
+          )}
+
+          {/* AI Chat FAB */}
           <Button
             variant="gradient"
             size="lg"
@@ -781,6 +1147,21 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
           onDeleted={refreshItems}
         />
       </div>
+
+      {/* Add Place Modal */}
+      <AnimatePresence>
+        {addPlaceOpen && selectedTrip && (
+          <AddPlaceModal
+            open={addPlaceOpen}
+            onClose={() => { setAddPlaceOpen(false); setAddPrefill(null) }}
+            tripId={selectedTrip.id}
+            tripDays={tripDays}
+            defaultDay={dayGroups[selectedDay]?.day || 1}
+            onAdded={refreshItems}
+            prefill={addPrefill}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }

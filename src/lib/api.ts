@@ -261,6 +261,54 @@ export async function getAIRecommendations(
   })
 }
 
+// ─── OSRM Road Routing ─────────────────────────────────
+
+export interface RouteResult {
+  geometry: {
+    type: 'LineString'
+    coordinates: [number, number][] // [lng, lat] pairs
+  }
+  legs: {
+    distance: number
+    duration: number
+    distance_km: string
+    duration_min: number
+  }[]
+  total_distance_km: string
+  total_duration_min: number
+}
+
+export async function getRoute(
+  waypoints: { lat: number; lng: number }[]
+): Promise<RouteResult | null> {
+  if (waypoints.length < 2) return null
+  const coords = waypoints.map(w => `${w.lng},${w.lat}`).join(';')
+  try {
+    return await apiFetch<RouteResult>(`/api/routing/route?coords=${encodeURIComponent(coords)}`)
+  } catch {
+    return null
+  }
+}
+
+// ─── Image Search ───────────────────────────────────────
+
+export interface ImageResult {
+  url: string
+  thumbnail: string
+  title: string
+}
+
+export async function searchImages(query: string): Promise<ImageResult[]> {
+  try {
+    const res = await apiFetch<{ query: string; images: ImageResult[] }>(
+      `/api/images/search?q=${encodeURIComponent(query)}`
+    )
+    return res.images || []
+  } catch {
+    return []
+  }
+}
+
 // ─── Health Check ──────────────────────────────────
 
 export async function checkAPIHealth(): Promise<{

@@ -13,6 +13,8 @@ import hotelRoutes from './routes/hotels.js'
 import bookingRoutes from './routes/booking.js'
 import priceRoutes from './routes/prices.js'
 import rapidapiRoutes from './routes/rapidapi.js'
+import routingRoutes from './routes/routing.js'
+import imagesRoutes from './routes/images.js'
 import { checkSupabase } from './services/supabase.js'
 import { checkClaude } from './services/claude.js'
 import { checkGemini } from './services/gemini.js'
@@ -65,6 +67,8 @@ app.use('/api/hotels', hotelRoutes)
 app.use('/api/booking', bookingRoutes)
 app.use('/api/prices', priceRoutes)
 app.use('/api/rapidapi', rapidapiRoutes)
+app.use('/api/routing', routingRoutes)
+app.use('/api/images', imagesRoutes)
 
 // ─── Static Files (Production) ────────────────────────────
 if (IS_PROD) {

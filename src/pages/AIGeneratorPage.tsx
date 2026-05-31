@@ -13,9 +13,9 @@ import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
 import { Progress } from "../components/ui/progress"
 import { cn } from "@/lib/utils"
-import { useState, useRef, useCallback } from "react"
+import { useState, useRef, useCallback, useEffect } from "react"
 import { generateItinerary, searchPlaces, getAIRecommendations, getWeather } from "../lib/api"
-import { createTrip, addItineraryItem, getSession } from "../lib/supabase"
+import { createTrip, addItineraryItem, getSession, getTrips } from "../lib/supabase"
 import type { Trip } from "../lib/supabase"
 
 const TRIP_TYPES = [
@@ -95,6 +95,10 @@ export function AIGeneratorPage({ navigateTo }: Props) {
   const [error, setError] = useState("")
   const [savedTripId, setSavedTripId] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  // Save to existing trip
+  const [existingTrips, setExistingTrips] = useState<Trip[]>([])
+  const [selectedExistingTrip, setSelectedExistingTrip] = useState<string>("new")
+  const [showTripSelector, setShowTripSelector] = useState(false)
 
   // Autocomplete state
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([])
@@ -131,6 +135,13 @@ export function AIGeneratorPage({ navigateTo }: Props) {
     setShowSuggestions(false)
     setSuggestions([])
   }, [])
+
+  // Load existing trips when result is shown
+  useEffect(() => {
+    if (result) {
+      getTrips().then(setExistingTrips).catch(() => setExistingTrips([]))
+    }
+  }, [result])
 
   // ─── Reset form ──────────────────────────────────────
   const handleReset = useCallback(() => {
@@ -235,22 +246,29 @@ export function AIGeneratorPage({ navigateTo }: Props) {
 
     setIsSaving(true)
     try {
-      // 1. Create trip record
-      const trip = await createTrip({
-        name: `${city} - ${duration} Hari`,
-        destination: city,
-        start_date: undefined,
-        end_date: undefined,
-        status: "planning",
-      }) as Trip
+      let tripId: string
 
-      // 2. Save each itinerary item to DB
-      const savedItems: any[] = []
+      if (selectedExistingTrip === "new") {
+        // Create new trip record
+        const trip = await createTrip({
+          name: `${city} - ${duration} Hari`,
+          destination: city,
+          start_date: startDate || undefined,
+          end_date: endDate || undefined,
+          status: "planning",
+        }) as Trip
+        tripId = trip.id
+      } else {
+        // Use existing trip
+        tripId = selectedExistingTrip
+      }
+
+      // Save each itinerary item
       for (const day of result.itinerary) {
         for (let i = 0; i < day.items.length; i++) {
           const item = day.items[i]
-          const saved = await addItineraryItem({
-            trip_id: trip.id,
+          await addItineraryItem({
+            trip_id: tripId,
             day: day.day,
             time: item.time || "09:00",
             title: item.title,
@@ -263,12 +281,11 @@ export function AIGeneratorPage({ navigateTo }: Props) {
             notes: item.tips,
             sort_order: i,
           })
-          savedItems.push(saved)
         }
       }
 
-      setSavedTripId(trip.id)
-      setProgressLabel("Trip berhasil disimpan!")
+      setSavedTripId(tripId)
+      setProgressLabel(selectedExistingTrip === "new" ? "Trip baru berhasil dibuat!" : "Itinerary berhasil ditambahkan ke trip!")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal menyimpan trip.")
     } finally {
@@ -831,23 +848,70 @@ export function AIGeneratorPage({ navigateTo }: Props) {
                   </div>
 
                     {/* Save actions */}
-                    <div className="flex justify-center gap-3 pt-2">
-                      <Button variant="outline" onClick={handleReset}>
-                        <RotateCcw className="w-4 h-4 mr-2" />Generate Ulang
-                      </Button>
-                      {savedTripId ? (
-                        <Button variant="outline" onClick={() => navigateTo("editor")}>
-                          <Check className="w-4 h-4 mr-2" />Lihat di Editor
-                        </Button>
-                      ) : (
-                        <Button variant="gradient" size="lg" onClick={handleSave} disabled={isSaving}>
-                          {isSaving ? (
-                            <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Menyimpan...</>
-                          ) : (
-                            <><Save className="w-4 h-4 mr-2" />Simpan sebagai Trip</>
+                    <div className="space-y-3 pt-2">
+                      {/* Trip selector */}
+                      {!savedTripId && (
+                        <div className="flex flex-col gap-2 max-w-sm mx-auto">
+                          <p className="text-xs font-medium text-muted-foreground text-center">Simpan ke mana?</p>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setSelectedExistingTrip("new")}
+                              className={cn(
+                                "flex-1 py-2 px-3 rounded-xl text-sm font-medium transition-all border",
+                                selectedExistingTrip === "new"
+                                  ? "bg-gradient-to-r from-[var(--aurora-start)]/10 to-[var(--aurora-end)]/10 border-[var(--aurora-start)]/40"
+                                  : "border-transparent hover:bg-secondary/60"
+                              )}
+                            >
+                              ✨ Trip Baru
+                            </button>
+                            <button
+                              onClick={() => setSelectedExistingTrip(existingTrips[0]?.id || "new")}
+                              className={cn(
+                                "flex-1 py-2 px-3 rounded-xl text-sm font-medium transition-all border",
+                                selectedExistingTrip !== "new"
+                                  ? "bg-gradient-to-r from-[var(--aurora-start)]/10 to-[var(--aurora-end)]/10 border-[var(--aurora-start)]/40"
+                                  : "border-transparent hover:bg-secondary/60"
+                              )}
+                            >
+                              📁 Trip Saya
+                            </button>
+                          </div>
+                          {selectedExistingTrip !== "new" && existingTrips.length > 0 && (
+                            <select
+                              value={selectedExistingTrip}
+                              onChange={e => setSelectedExistingTrip(e.target.value)}
+                              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                            >
+                              {existingTrips.map(t => (
+                                <option key={t.id} value={t.id}>{t.name} — {t.destination}</option>
+                              ))}
+                            </select>
                           )}
-                        </Button>
+                          {selectedExistingTrip !== "new" && existingTrips.length === 0 && (
+                            <p className="text-xs text-muted-foreground text-center">Belum ada trip. Pilih "Trip Baru".</p>
+                          )}
+                        </div>
                       )}
+
+                      <div className="flex justify-center gap-3">
+                        <Button variant="outline" onClick={handleReset}>
+                          <RotateCcw className="w-4 h-4 mr-2" />Generate Ulang
+                        </Button>
+                        {savedTripId ? (
+                          <Button variant="outline" onClick={() => navigateTo("editor")}>
+                            <Check className="w-4 h-4 mr-2" />Lihat di Editor
+                          </Button>
+                        ) : (
+                          <Button variant="gradient" size="lg" onClick={handleSave} disabled={isSaving}>
+                            {isSaving ? (
+                              <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Menyimpan...</>
+                            ) : (
+                              <><Save className="w-4 h-4 mr-2" />{selectedExistingTrip === "new" ? "Simpan sebagai Trip Baru" : "Tambah ke Trip Saya"}</>
+                            )}
+                          </Button>
+                        )}
+                      </div>
                     </div>
 
                     <p className="text-xs text-center text-muted-foreground">

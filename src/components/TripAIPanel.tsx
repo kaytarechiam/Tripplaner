@@ -12,6 +12,7 @@ import { useState, useRef, useEffect } from "react"
 import { updateItineraryItem, deleteItineraryItem, addItineraryItem } from "../lib/supabase"
 import type { Trip, ItineraryItem, AISuggestion, AIChatMessage, ItineraryChange } from "../lib/ai-types"
 import { changeGetItemId } from "../lib/ai-types"
+import { apiFetch } from "../lib/api"
 
 interface TripAIPanelProps {
   open: boolean
@@ -28,8 +29,9 @@ interface ChatBubble {
   text: string
   timestamp: number
   suggestions?: AISuggestion[]
-  appliedIds?: string[]  // suggestion IDs that were applied
-  rejectedIds?: string[] // suggestion IDs that were rejected
+  appliedIds?: string[]
+  rejectedIds?: string[]
+  appliedActions?: number  // count of AI actions applied
 }
 
 const DAY_COLORS = [
@@ -377,6 +379,42 @@ export function TripAIPanel({
     }
   }, [open])
 
+  const applyActions = async (actions: any[]) => {
+    if (!actions?.length) return 0
+    let applied = 0
+    for (const action of actions) {
+      try {
+        if (action.type === 'add' && action.item) {
+          await addItineraryItem({
+            trip_id: trip.id,
+            day: action.item.day || 1,
+            time: action.item.time || '09:00',
+            title: action.item.title || 'Tempat Baru',
+            description: action.item.description,
+            location: action.item.location,
+            latitude: action.item.latitude || null,
+            longitude: action.item.longitude || null,
+            category: action.item.category || 'activity',
+            duration_minutes: action.item.duration_minutes || 60,
+            notes: action.item.notes,
+            sort_order: 999,
+          })
+          applied++
+        } else if (action.type === 'update' && action.itemId && action.changes) {
+          await updateItineraryItem(action.itemId, action.changes)
+          applied++
+        } else if (action.type === 'delete' && action.itemId) {
+          await deleteItineraryItem(action.itemId)
+          applied++
+        }
+      } catch (err) {
+        console.error('[TripAI] Action failed:', action, err)
+      }
+    }
+    if (applied > 0) onItemsChanged()
+    return applied
+  }
+
   const sendMessage = async () => {
     const text = input.trim()
     if (!text || isLoading) return
@@ -392,9 +430,9 @@ export function TripAIPanel({
     setInput("")
     setIsLoading(true)
 
-    // Simulate AI thinking
+    const thinkingId = `thinking-${Date.now()}`
     const thinkingMsg: ChatBubble = {
-      id: `thinking-${Date.now()}`,
+      id: thinkingId,
       role: "assistant",
       text: "",
       timestamp: Date.now(),
@@ -402,36 +440,41 @@ export function TripAIPanel({
     setMessages(prev => [...prev, thinkingMsg])
 
     try {
-      // Build prompt
-      const prompt = buildAIPrompt(text, itineraryItems, trip)
-
-      // Call backend AI — use VITE_API_BASE from env
-      const apiBase = (import.meta as any).env?.VITE_API_BASE || ''
-      const res = await fetch(`${apiBase}/api/ai/chat`, {
+      // Send message to backend with trip context + item IDs for AI to reference
+      const result = await apiFetch<{ reply: string; actions: any[] }>('/api/ai/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: prompt,
+          message: text,
           trip_id: trip.id,
           context: buildTripContext(itineraryItems, trip),
+          items: itineraryItems.map(i => ({ id: i.id, title: i.title, day: i.day, time: i.time })),
         }),
       })
-      const result = await res.json().catch(() => ({ reply: '' }))
 
-      // Parse suggestions from reply
-      const suggestions = result.reply
-        ? parseAIResponse(result.reply, itineraryItems, trip.id)
-        : []
+      const reply = result.reply || "Maaf, aku belum bisa menjawab saat ini. Coba lagi ya!"
+      const actions = Array.isArray(result.actions) ? result.actions : []
+
+      // Apply actions first, then update message with result
+      let appliedCount = 0
+      if (actions.length > 0) {
+        appliedCount = await applyActions(actions)
+      }
+
+      // Build actionSummary text
+      const actionSummary = appliedCount > 0
+        ? `\n\n✅ ${appliedCount} perubahan diterapkan ke itinerary.`
+        : ''
 
       setMessages(prev => prev.map(m =>
-        m.id === thinkingMsg.id
-          ? { ...m, text: result.reply || "Maaf, aku belum bisa menjawab saat ini. Coba lagi ya!", suggestions }
+        m.id === thinkingId
+          ? { ...m, text: reply + actionSummary, appliedActions: appliedCount }
           : m
       ))
-    } catch {
+    } catch (err) {
+      console.error('[TripAIPanel] Chat error:', err)
       setMessages(prev => prev.map(m =>
-        m.id === thinkingMsg.id
-          ? { ...m, text: "Hmm, aku lagi tidak bisa membantu saat ini. Pastikan server AI sudah aktif.", suggestions: [] }
+        m.id === thinkingId
+          ? { ...m, text: "Hmm, aku lagi tidak bisa membantu saat ini. Pastikan server AI sudah aktif." }
           : m
       ))
     } finally {
