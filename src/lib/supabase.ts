@@ -68,6 +68,7 @@ export type Trip = {
   end_date?: string
   status: 'planning' | 'active' | 'completed'
   cover_image?: string
+  is_public?: boolean
   created_at: string
   updated_at: string
 }
@@ -154,11 +155,19 @@ export async function getItinerary(tripId: string) {
     .from('itinerary_items')
     .select('*')
     .eq('trip_id', tripId)
-    .order('day_number', { ascending: true })  // DB column: day_number (not day)
-    .order('order', { ascending: true })        // DB column: order (not sort_order)
+    .order('day_number', { ascending: true })
+    .order('order', { ascending: true })
 
   if (error) throw error
-  return data as ItineraryItem[]
+  // Map DB column names → frontend field names
+  return (data || []).map((row: any) => ({
+    ...row,
+    day: row.day_number,
+    title: row.name,
+    sort_order: row.order,
+    latitude: row.lat ?? row.latitude,
+    longitude: row.lng ?? row.longitude,
+  })) as ItineraryItem[]
 }
 
 // Add itinerary item
@@ -168,8 +177,25 @@ export async function addItineraryItem(item: Omit<ItineraryItem, 'id' | 'created
   // Map frontend field names → actual DB column names
   // DB uses: day_number, name, order, lat, lng
   const { day, title, sort_order, latitude, longitude, ...rest } = item as any
+
+  // Map frontend category values → DB allowed values
+  // DB constraint: ONLY allows 'attraction'|'food'|'transport'|'accommodation'
+  const categoryMap: Record<string, string> = {
+    hotel: 'accommodation',
+    landmark: 'attraction',
+    nature: 'attraction',
+    activity: 'attraction',
+    shopping: 'attraction',
+    transport: 'transport',
+    food: 'food',
+    accommodation: 'accommodation',
+    attraction: 'attraction',
+  }
+  const mappedCategory = categoryMap[rest.category] || 'attraction'
+
   const dbItem = {
     ...rest,
+    category: mappedCategory,
     day_number: day,
     name: title,
     order: sort_order ?? 0,
@@ -185,6 +211,58 @@ export async function addItineraryItem(item: Omit<ItineraryItem, 'id' | 'created
 
   if (error) throw error
   return data as ItineraryItem
+}
+
+// Copy a public trip (full copy with itinerary items) to user's own trips
+export async function copyTripFull(
+  sourceTripId: string,
+  startDate: string,
+  daysCount: number,
+  tripName: string,
+  destination: string,
+): Promise<Trip> {
+  if (!supabase) throw new Error('Supabase not configured')
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  // Calculate end date
+  const start = new Date(startDate + 'T00:00:00')
+  const end = new Date(start.getTime() + (daysCount - 1) * 86400000)
+  const endDate = end.toISOString().split('T')[0]
+
+  // 1. Create new trip
+  const { data: newTrip, error: tripError } = await supabase
+    .from('trips')
+    .insert({
+      owner_id: user.id,
+      title: `[Salinan] ${tripName}`,
+      destination,
+      start_date: startDate,
+      end_date: endDate,
+      status: 'planning',
+      is_public: false,
+    })
+    .select()
+    .single()
+  if (tripError) throw tripError
+
+  // 2. Copy itinerary items from source trip
+  const { data: sourceItems } = await supabase
+    .from('itinerary_items')
+    .select('*')
+    .eq('trip_id', sourceTripId)
+    .order('day_number', { ascending: true })
+    .order('order', { ascending: true })
+
+  if (sourceItems && sourceItems.length > 0) {
+    const newItems = sourceItems.map(({ id, created_at, trip_id, ...item }: any) => ({
+      ...item,
+      trip_id: newTrip.id,
+    }))
+    await supabase.from('itinerary_items').insert(newItems)
+  }
+
+  return newTrip as Trip
 }
 
 // Get bucket list
@@ -297,6 +375,113 @@ export async function updateTrip(id: string, updates: Partial<Omit<Trip, 'id' | 
   return data as Trip
 }
 
+// ─── Trip Members ────────────────────────────────────────────
+
+export type TripMember = {
+  id: string
+  trip_id: string
+  user_id: string
+  name: string
+  email?: string
+  role: string
+  status?: string
+  invited_by?: string
+  created_at?: string
+}
+
+export async function getTripMembers(tripId: string) {
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from('trip_members')
+    .select('*')
+    .eq('trip_id', tripId)
+  if (error) return []
+  return data as TripMember[]
+}
+
+// Invite a user by email to a trip
+export async function inviteTripMember(tripId: string, email: string, tripName: string) {
+  if (!supabase) throw new Error('Supabase not configured')
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  // Find invitee by email in profiles
+  const { data: profiles, error: profileErr } = await supabase
+    .from('profiles')
+    .select('id, name, email')
+    .eq('email', email)
+    .limit(1)
+
+  if (profileErr || !profiles || profiles.length === 0) {
+    throw new Error('Pengguna dengan email tersebut tidak ditemukan. Pastikan mereka sudah terdaftar.')
+  }
+  const invitee = profiles[0]
+
+  // Check if already invited
+  const { data: existing } = await supabase
+    .from('trip_members')
+    .select('id, status')
+    .eq('trip_id', tripId)
+    .eq('user_id', invitee.id)
+    .maybeSingle()
+
+  if (existing) {
+    throw new Error(`Pengguna sudah ${existing.status === 'accepted' ? 'bergabung' : 'diundang'} ke trip ini.`)
+  }
+
+  // Create trip_members entry (pending)
+  const { error: memberErr } = await supabase
+    .from('trip_members')
+    .insert({
+      trip_id: tripId,
+      user_id: invitee.id,
+      name: invitee.name || email.split('@')[0],
+      email: invitee.email || email,
+      role: 'member',
+      status: 'pending',
+      invited_by: user.id,
+    })
+  if (memberErr) throw memberErr
+
+  // Create notification for the invitee
+  const myName = user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'Seseorang'
+  await supabase
+    .from('notifications')
+    .insert({
+      user_id: invitee.id,
+      type: 'invite',
+      title: `Undangan Trip: ${tripName}`,
+      body: `${myName} mengundang kamu untuk bergabung ke trip "${tripName}". Terima atau tolak undangan ini.`,
+      read: false,
+      action_url: `trip_invite:${tripId}`,
+    })
+
+  return invitee
+}
+
+// Accept or reject a trip invitation
+export async function respondToTripInvite(tripId: string, accept: boolean) {
+  if (!supabase) throw new Error('Supabase not configured')
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  if (accept) {
+    const { error } = await supabase
+      .from('trip_members')
+      .update({ status: 'accepted' })
+      .eq('trip_id', tripId)
+      .eq('user_id', user.id)
+    if (error) throw error
+  } else {
+    const { error } = await supabase
+      .from('trip_members')
+      .delete()
+      .eq('trip_id', tripId)
+      .eq('user_id', user.id)
+    if (error) throw error
+  }
+}
+
 // ─── Realtime Subscription ───────────────────────────────────
 
 export function subscribeToTrips(callback: (trip: Trip) => void) {
@@ -338,12 +523,40 @@ export async function signInWithGoogle() {
   if (error) throw error
 }
 
-// Check if email already registered
-// Note: Supabase normalizes auth errors for security, so we let signUp handle duplicates
+// Ensure profile exists for the current user (creates if missing)
+export async function ensureProfile() {
+  if (!supabase) return
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+
+  const name = user.user_metadata?.full_name || user.user_metadata?.name || null
+
+  await supabase
+    .from('profiles')
+    .upsert({
+      id: user.id,
+      email: user.email,
+      full_name: name,
+      name: name,
+      role: 'traveler',
+    }, { onConflict: 'id' })
+}
+
+// Check if email already registered via signInWithPassword (no side effects)
 export async function checkEmailExists(email: string): Promise<boolean> {
-  // We cannot reliably check email existence without side effects.
-  // Return false so callers proceed to signUp, which returns the proper error.
-  return false
+  if (!supabase) return false
+  // Attempt sign-in with a clearly-wrong password.
+  // If error is "Invalid login credentials" → email EXISTS
+  // If error is "Email not confirmed" → email EXISTS (unconfirmed)
+  // If no error → shouldn't happen (password would be wrong)
+  // If network error → return false (let signUp try)
+  const { error } = await supabase.auth.signInWithPassword({
+    email,
+    password: '__tripplanner_check__',
+  })
+  if (!error) return false // weird — no error with wrong password
+  const msg = error.message.toLowerCase()
+  return msg.includes('invalid login credentials') || msg.includes('email not confirmed')
 }
 
 // Update password (requires current session)

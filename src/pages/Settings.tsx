@@ -153,10 +153,11 @@ export function Settings({ navigateTo, onLogout, user, onUserUpdate }: SettingsP
       })
       if (authError) throw authError
 
-      // Update profiles table
+      // Update profiles table — set both name and full_name for compatibility
       const { error: profileError } = await supabase!.from("profiles").upsert({
         id: user.id,
         name: profileName,
+        full_name: profileName,
         username: profileUsername,
         bio: profileBio,
         avatar_url: profileAvatarUrl,

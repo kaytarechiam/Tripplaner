@@ -8,7 +8,7 @@ import { Badge } from "../components/ui/badge"
 import { Avatar, AvatarFallback } from "../components/ui/avatar"
 import { cn } from "@/lib/utils"
 import { useState, useEffect } from "react"
-import { supabase } from "../lib/supabase"
+import { supabase, respondToTripInvite } from "../lib/supabase"
 import { getSession } from "../lib/supabase"
 
 type Page = "landing" | "login" | "register" | "home" | "editor" | "ai" | "splitbill" | "explore" | "profile" | "achievements" | "bucketlist" | "settings" | "notifications"
@@ -44,7 +44,7 @@ interface NotificationItem {
   type: string
   title: string
   body: string | null
-  link: string | null
+  action_url: string | null
   read: boolean
   created_at: string
 }
@@ -107,6 +107,30 @@ export function Notifications({ navigateTo }: NotificationsProps) {
       if (unreadIds.length > 0) {
         supabase.from('notifications').update({ read: true }).in('id', unreadIds).then(() => {})
       }
+    }
+  }
+
+  const [respondingTo, setRespondingTo] = useState<string | null>(null)
+
+  const handleInviteResponse = async (notification: NotificationItem, accept: boolean) => {
+    if (!notification.action_url || !notification.action_url.startsWith('trip_invite:')) return
+    const tripId = notification.action_url.replace('trip_invite:', '')
+    setRespondingTo(notification.id)
+    try {
+      await respondToTripInvite(tripId, accept)
+      // Mark notification as read and update its body
+      setNotifications(prev => prev.map(n =>
+        n.id === notification.id
+          ? { ...n, read: true, body: accept ? '✓ Undangan diterima' : '✕ Undangan ditolak' }
+          : n
+      ))
+      if (supabase) {
+        supabase.from('notifications').update({ read: true }).eq('id', notification.id).then(() => {})
+      }
+    } catch (err: any) {
+      console.error('Respond invite error:', err)
+    } finally {
+      setRespondingTo(null)
     }
   }
 
@@ -195,6 +219,30 @@ export function Notifications({ navigateTo }: NotificationsProps) {
                           day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
                         })}
                       </p>
+                    )}
+                    {/* Accept / Reject for invite notifications */}
+                    {notification.type === 'invite' && notification.action_url?.startsWith('trip_invite:') &&
+                      !notification.body?.startsWith('✓') && !notification.body?.startsWith('✕') && (
+                      <div className="flex gap-2 mt-2">
+                        <button
+                          onClick={() => handleInviteResponse(notification, true)}
+                          disabled={respondingTo === notification.id}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-500 text-white text-xs font-medium hover:bg-emerald-600 disabled:opacity-50 transition-colors"
+                        >
+                          {respondingTo === notification.id
+                            ? <Loader2 className="w-3 h-3 animate-spin" />
+                            : <Check className="w-3 h-3" />}
+                          Terima
+                        </button>
+                        <button
+                          onClick={() => handleInviteResponse(notification, false)}
+                          disabled={respondingTo === notification.id}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-500/80 text-white text-xs font-medium hover:bg-red-600 disabled:opacity-50 transition-colors"
+                        >
+                          <X className="w-3 h-3" />
+                          Tolak
+                        </button>
+                      </div>
                     )}
                   </div>
 

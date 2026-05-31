@@ -3,7 +3,7 @@ import { useState, useEffect } from "react"
 import {
   MapPin, Calendar, Star, Copy,
   Share2, Loader2, Check,
-  MessageSquare, X, Send
+  MessageSquare, X, Send, Heart
 } from "lucide-react"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
-import { supabase, saveTrip, getComments, addComment } from "@/lib/supabase"
+import { supabase, getComments, addComment, copyTripFull } from "@/lib/supabase"
 import type { TripComment } from "@/lib/supabase"
 
 interface PublicTrip {
@@ -42,8 +42,11 @@ interface TripDetailModalProps {
 }
 
 const CATEGORY_ICONS: Record<string, string> = {
+  // Frontend values
   hotel: "🏨", landmark: "🏛️", food: "🍜",
   nature: "🌿", activity: "🎯", shopping: "🛍️", transport: "🚗",
+  // DB allowed values
+  accommodation: "🏨", attraction: "🏛️",
 }
 
 export function TripDetailModal({ trip, onClose, onCopied }: TripDetailModalProps) {
@@ -57,9 +60,17 @@ export function TripDetailModal({ trip, onClose, onCopied }: TripDetailModalProp
   const [newComment, setNewComment] = useState("")
   const [commentLoading, setCommentLoading] = useState(false)
   const [activeTab, setActiveTab] = useState<"itinerary" | "comments">("itinerary")
+  const [saved, setSaved] = useState(false)
+  const [saveLoading, setSaveLoading] = useState(false)
 
   useEffect(() => {
     if (!trip || !supabase) return
+    setCopied(false)
+    setSaved(false)
+    setStartDate("")
+    setError("")
+    setShowDatePicker(false)
+
     // Load itinerary items — use actual DB column names
     supabase
       .from('itinerary_items')
@@ -71,6 +82,17 @@ export function TripDetailModal({ trip, onClose, onCopied }: TripDetailModalProp
 
     // Load comments
     getComments(trip.id).then(setComments)
+
+    // Check if already saved
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return
+      supabase!.from('saved_trips')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('original_trip_id', trip.id)
+        .maybeSingle()
+        .then(({ data }) => { if (data) setSaved(true) })
+    })
   }, [trip?.id])
 
   if (!trip) return null
@@ -84,13 +106,48 @@ export function TripDetailModal({ trip, onClose, onCopied }: TripDetailModalProp
     }
   }
 
+  // Simpan = bookmark to Disimpan tab (saved_trips with original_trip_id)
+  const handleSimpan = async () => {
+    if (!supabase || trip.id.startsWith('mock-')) return
+    setSaveLoading(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setError("Login dulu untuk menyimpan trip"); return }
+
+      if (saved) {
+        // Unsave
+        await supabase.from('saved_trips')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('original_trip_id', trip.id)
+        setSaved(false)
+      } else {
+        // Save bookmark
+        await supabase.from('saved_trips').upsert({
+          user_id: user.id,
+          original_trip_id: trip.id,
+          name: trip.name,
+          destination: trip.destination,
+          days: trip.days,
+          tags: trip.tags,
+        }, { onConflict: 'user_id,original_trip_id' })
+        setSaved(true)
+      }
+    } catch (err: unknown) {
+      console.error("Simpan error:", err)
+    } finally {
+      setSaveLoading(false)
+    }
+  }
+
+  // Salin = full copy — creates a new real trip in user's trips
   const handleCopyToMyTrips = async () => {
     if (!startDate) { setError("Pilih tanggal mulai dulu"); return }
     if (!supabase) { setError("Supabase tidak dikonfigurasi"); return }
+    if (trip.id.startsWith('mock-')) { setError("Trip ini hanya contoh dan tidak bisa disalin. Buat trip baru dari menu Editor."); return }
     setCopyLoading(true)
     setError("")
     try {
-      // Use getUser() — fresh auth call, not cached session
       const { data: { user }, error: authError } = await supabase.auth.getUser()
       if (authError || !user) {
         setError("Sesi kadaluarsa. Silakan login ulang.")
@@ -98,23 +155,8 @@ export function TripDetailModal({ trip, onClose, onCopied }: TripDetailModalProp
         return
       }
 
-      let endDate = ""
-      if (trip.days > 0) {
-        const start = new Date(startDate + "T00:00:00")
-        const end = new Date(start.getTime() + (trip.days - 1) * 86400000)
-        endDate = end.toISOString().split("T")[0]
-      }
-
-      // Save to saved_trips (not trips — this is a copy from Explore)
-      await saveTrip({
-        original_trip_id: trip.id,
-        name: trip.name,
-        destination: trip.destination,
-        days: trip.days,
-        start_date: startDate,
-        end_date: endDate || undefined,
-        tags: trip.tags,
-      })
+      // Copy full trip (creates entry in trips table + copies itinerary items)
+      await copyTripFull(trip.id, startDate, trip.days, trip.name, trip.destination)
 
       setCopied(true)
       setTimeout(() => { onCopied?.(); onClose() }, 1200)
@@ -302,12 +344,27 @@ export function TripDetailModal({ trip, onClose, onCopied }: TripDetailModalProp
             </div>
           )}
 
-          {/* Action Buttons — only Share + Salin (no Simpan) */}
+          {/* Action Buttons — Share + Simpan (bookmark) + Salin (full copy) */}
           <div className="flex gap-2 pt-2">
-            <Button variant="outline" size="sm" className="flex-1" onClick={handleShare}>
+            <Button variant="outline" size="sm" onClick={handleShare}>
               <Share2 className="w-4 h-4 mr-1" />
               Share
             </Button>
+            {supabase && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSimpan}
+                disabled={saveLoading}
+                className={cn(saved && "border-red-400 text-red-500 hover:bg-red-50")}
+              >
+                {saveLoading
+                  ? <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                  : <Heart className={cn("w-4 h-4 mr-1", saved && "fill-red-500 text-red-500")} />
+                }
+                {saved ? "Disimpan" : "Simpan"}
+              </Button>
+            )}
             {!showDatePicker && (
               <Button variant="gradient" size="sm" className="flex-1"
                 onClick={() => setShowDatePicker(true)}>

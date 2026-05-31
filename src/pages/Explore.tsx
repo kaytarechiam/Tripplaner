@@ -412,10 +412,24 @@ export function Explore({ navigateTo }: ExploreProps) {
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [searchQuery, setSearchQuery] = useState("")
   const [sortBy, setSortBy] = useState<"popular" | "recent" | "rating">("popular")
-  const [likedTrips, setLikedTrips] = useState<string[]>([])
+  const [savedTripIds, setSavedTripIds] = useState<string[]>([])
   const [trips, setTrips] = useState<PublicTrip[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedTrip, setSelectedTrip] = useState<PublicTrip | null>(null)
+
+  // Load saved trip IDs for heart state on mount
+  useEffect(() => {
+    if (!supabase) return
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return
+      supabase!.from('saved_trips')
+        .select('original_trip_id')
+        .eq('user_id', user.id)
+        .then(({ data }) => {
+          if (data) setSavedTripIds(data.map((s: any) => s.original_trip_id).filter(Boolean))
+        })
+    })
+  }, [])
 
   useEffect(() => {
     if (!supabase) {
@@ -428,46 +442,62 @@ export function Explore({ navigateTo }: ExploreProps) {
       .from('trips')
       .select(`
         id,
+        title,
         name,
         destination,
         start_date,
         end_date,
-        status
+        status,
+        cover_gradient,
+        tags,
+        profiles(name, avatar_url)
       `)
-      .limit(20)
+      .eq('is_public', true)
+      .order('created_at', { ascending: false })
+      .limit(30)
       .then(({ data, error }) => {
         if (error || !data || data.length === 0) {
-          // No trips yet — fallback to mock data
+          // No public trips yet — fallback to mock data
           setTrips(MOCK_TRIPS)
         } else {
-          setTrips(data.map((t, i) => ({
-            id: t.id,
-            trip_id: t.id,
-            name: t.name,
-            destination: t.destination,
-            start_date: t.start_date,
-            end_date: t.end_date,
-            status: t.status,
-            days: t.start_date && t.end_date
-              ? Math.ceil((new Date(t.end_date).getTime() - new Date(t.start_date).getTime()) / 86400000) + 1
-              : 3,
-            places: 0,
-            likes: Math.floor(Math.random() * 200) + 20,
-            comments: Math.floor(Math.random() * 50) + 5,
-            rating: 4.0 + Math.random(),
-            gradient: GRADIENTS[i % GRADIENTS.length],
-            tags: ["all"],
-            author: "traveler",
-            authorAvatar: t.name.split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2),
-          })))
+          setTrips(data.map((t: any, i: number) => {
+            const tripName = t.title || t.name || 'Trip'
+            const profile = Array.isArray(t.profiles) ? t.profiles[0] : t.profiles
+            const authorName = profile?.name || 'traveler'
+            const authorAvatar = authorName.split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)
+            const rawTags: string[] = Array.isArray(t.tags) && t.tags.length > 0 ? t.tags : ['all']
+            return {
+              id: t.id,
+              trip_id: t.id,
+              name: tripName,
+              destination: t.destination || '',
+              start_date: t.start_date,
+              end_date: t.end_date,
+              status: t.status,
+              days: t.start_date && t.end_date
+                ? Math.max(1, Math.ceil((new Date(t.end_date).getTime() - new Date(t.start_date).getTime()) / 86400000) + 1)
+                : 3,
+              places: 0,
+              likes: Math.floor(Math.random() * 500) + 50,
+              comments: Math.floor(Math.random() * 80) + 5,
+              rating: parseFloat((4.0 + Math.random()).toFixed(1)),
+              gradient: t.cover_gradient || GRADIENTS[i % GRADIENTS.length],
+              tags: rawTags,
+              author: authorName,
+              authorAvatar,
+              image: getDestinationImage(t.destination || '') || undefined,
+            } as PublicTrip
+          }))
         }
         setLoading(false)
       })
   }, [])
 
-  const toggleLike = async (id: string) => {
-    const isLiked = likedTrips.includes(id)
-    setLikedTrips(prev =>
+  const toggleSave = async (id: string) => {
+    // Can't save mock trips (invalid UUID)
+    if (id.startsWith('mock-')) return
+    const isSaved = savedTripIds.includes(id)
+    setSavedTripIds(prev =>
       prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
     )
     if (!supabase) return
@@ -478,19 +508,23 @@ export function Explore({ navigateTo }: ExploreProps) {
       if (!userId) return
       const trip = trips.find(t => t.id === id)
       if (!trip) return
-      if (!isLiked) {
-        await supabase.from("bucket_list").upsert({
+      if (!isSaved) {
+        // Save to saved_trips (Trip Saya feature)
+        await supabase.from("saved_trips").upsert({
           user_id: userId,
-          trip_id: id,
-          trip_name: trip.name,
+          original_trip_id: id,
+          name: trip.name,
           destination: trip.destination,
+          days: trip.days,
           created_at: new Date().toISOString(),
-        })
+        }, { onConflict: 'user_id,original_trip_id' })
       } else {
-        await supabase.from("bucket_list").delete().match({ user_id: userId, trip_id: id })
+        // Remove from saved_trips
+        await supabase.from("saved_trips").delete()
+          .match({ user_id: userId, original_trip_id: id })
       }
     } catch (err) {
-      console.error("Toggle like error:", err)
+      console.error("Toggle save error:", err)
     }
   }
 
@@ -631,15 +665,15 @@ export function Explore({ navigateTo }: ExploreProps) {
                   {/* Actions */}
                   <div className="absolute top-3 right-3 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
-                      onClick={(e) => { e.stopPropagation(); toggleLike(trip.id) }}
+                      onClick={(e) => { e.stopPropagation(); toggleSave(trip.id) }}
                       className={cn(
                         "w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-md transition-all",
-                        likedTrips.includes(trip.id)
+                        savedTripIds.includes(trip.id)
                           ? "bg-red-500 text-white"
                           : "bg-white/20 text-white hover:bg-white/30"
                       )}
                     >
-                      <Heart className={cn("w-4 h-4", likedTrips.includes(trip.id) && "fill-current")} />
+                      <Heart className={cn("w-4 h-4", savedTripIds.includes(trip.id) && "fill-current")} />
                     </button>
                     <button
                       onClick={async (e) => {

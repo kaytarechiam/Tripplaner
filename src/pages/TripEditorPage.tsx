@@ -16,13 +16,13 @@ import { Label } from "../components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog"
 import { cn, formatDistance, formatDuration } from "@/lib/utils"
 import { useState, useEffect, useRef, useCallback } from "react"
-import { getTrips, createTrip, getItinerary, addItineraryItem } from "../lib/supabase"
+import { getTrips, createTrip, getItinerary, addItineraryItem, updateTrip, getTripMembers, inviteTripMember } from "../lib/supabase"
 import { searchPlaces } from "../lib/api"
 import { TripMap } from "../components/TripMap"
 import { TripAIPanel } from "../components/TripAIPanel"
 import { PlaceDetailModal } from "../components/PlaceDetailModal"
 import { ReminderPanel } from "../components/ReminderPanel"
-import type { Trip, ItineraryItem } from "../lib/supabase"
+import type { Trip, ItineraryItem, TripMember } from "../lib/supabase"
 
 // ─── Destination types map ────────────────────────────────
 const destinationTypes: Record<string, { icon: typeof MapPin; color: string }> = {
@@ -213,8 +213,10 @@ function CreateTripModal({ onCreated }: { onCreated: (trip: Trip) => void }) {
       onCreated(trip as Trip)
       setForm({ name: "", destination: "", start_date: "", end_date: "" })
       setOpen(false)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal membuat trip")
+    } catch (err: any) {
+      console.error('[createTrip]', err)
+      const msg = err?.message || err?.error?.message || err?.error?.msg || JSON.stringify(err)
+      setError(msg)
     } finally {
       setIsLoading(false)
     }
@@ -311,6 +313,15 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
   const [showTripList, setShowTripList] = useState(true)
   const [aiPanelOpen, setAiPanelOpen] = useState(false)
   const [selectedItem, setSelectedItem] = useState<ItineraryItem | null>(null)
+  // Member invitation
+  const [showMemberDialog, setShowMemberDialog] = useState(false)
+  const [members, setMembers] = useState<TripMember[]>([])
+  const [inviteEmail, setInviteEmail] = useState("")
+  const [inviteLoading, setInviteLoading] = useState(false)
+  const [inviteError, setInviteError] = useState("")
+  const [inviteSuccess, setInviteSuccess] = useState("")
+  // Make public toggle
+  const [togglingPublic, setTogglingPublic] = useState(false)
 
   // Refresh itinerary items from DB
   const refreshItems = useCallback(() => {
@@ -341,11 +352,50 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
       .finally(() => setItemsLoading(false))
   }, [selectedTrip])
 
+  // Load members when trip changes
+  useEffect(() => {
+    if (!selectedTrip) { setMembers([]); return }
+    getTripMembers(selectedTrip.id).then(setMembers).catch(() => setMembers([]))
+  }, [selectedTrip?.id])
+
   const handleTripCreated = useCallback((trip: Trip) => {
     setTrips(prev => [trip, ...prev])
     setSelectedTrip(trip)
     setItineraryItems([])
   }, [])
+
+  const handleInviteMember = async () => {
+    if (!inviteEmail.trim() || !selectedTrip) return
+    setInviteLoading(true)
+    setInviteError("")
+    setInviteSuccess("")
+    try {
+      await inviteTripMember(selectedTrip.id, inviteEmail.trim(), selectedTrip.name)
+      setInviteSuccess(`Undangan dikirim ke ${inviteEmail}!`)
+      setInviteEmail("")
+      // Refresh members
+      const updated = await getTripMembers(selectedTrip.id)
+      setMembers(updated)
+    } catch (err: any) {
+      setInviteError(err.message || "Gagal mengirim undangan.")
+    } finally {
+      setInviteLoading(false)
+    }
+  }
+
+  const handleTogglePublic = async () => {
+    if (!selectedTrip) return
+    setTogglingPublic(true)
+    try {
+      const updated = await updateTrip(selectedTrip.id, { is_public: !selectedTrip.is_public })
+      setSelectedTrip(updated)
+      setTrips(prev => prev.map(t => t.id === updated.id ? updated : t))
+    } catch (err: any) {
+      console.error("Toggle public error:", err)
+    } finally {
+      setTogglingPublic(false)
+    }
+  }
 
   const dayGroups = groupItemsByDay(itineraryItems)
   const currentDay = dayGroups[selectedDay]
@@ -407,7 +457,86 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
             )}
           </div>
           <CreateTripModal onCreated={handleTripCreated} />
+          {/* Make Public + Invite Members row */}
+          {selectedTrip && (
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                onClick={handleTogglePublic}
+                disabled={togglingPublic}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-1.5 text-xs px-3 py-2 rounded-lg font-medium transition-all",
+                  selectedTrip.is_public
+                    ? "bg-emerald-500/20 text-emerald-600 border border-emerald-500/30 hover:bg-emerald-500/30"
+                    : "bg-secondary/60 text-muted-foreground hover:bg-secondary"
+                )}
+              >
+                {togglingPublic ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />}
+                {selectedTrip.is_public ? "Publik ✓" : "Jadikan Publik"}
+              </button>
+              <button
+                onClick={() => { setShowMemberDialog(true); setInviteError(""); setInviteSuccess("") }}
+                className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg font-medium bg-secondary/60 hover:bg-secondary transition-all"
+              >
+                <Users className="w-3 h-3" />
+                Anggota ({members.length})
+              </button>
+            </div>
+          )}
         </div>
+        {/* Member Invitation Dialog */}
+        {showMemberDialog && selectedTrip && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+            <div className="bg-background rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-lg">Kelola Anggota</h3>
+                <button onClick={() => setShowMemberDialog(false)} className="p-2 rounded-lg hover:bg-white/10">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <p className="text-sm text-muted-foreground">Undang teman ke "{selectedTrip.name}" via email</p>
+
+              {/* Invite form */}
+              <div className="flex gap-2">
+                <Input
+                  type="email"
+                  placeholder="email@teman.com"
+                  value={inviteEmail}
+                  onChange={e => { setInviteEmail(e.target.value); setInviteError(""); setInviteSuccess("") }}
+                  onKeyDown={e => e.key === 'Enter' && handleInviteMember()}
+                  className="flex-1 text-sm"
+                />
+                <Button variant="gradient" size="sm" onClick={handleInviteMember} disabled={inviteLoading || !inviteEmail.trim()}>
+                  {inviteLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                </Button>
+              </div>
+              {inviteError && <p className="text-xs text-red-500">{inviteError}</p>}
+              {inviteSuccess && <p className="text-xs text-emerald-500">{inviteSuccess}</p>}
+
+              {/* Current members */}
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                <p className="text-xs font-medium text-muted-foreground">ANGGOTA SAAT INI</p>
+                {members.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Belum ada anggota lain.</p>
+                ) : (
+                  members.map(m => (
+                    <div key={m.id} className="flex items-center gap-3 p-2 rounded-xl bg-secondary/30">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[var(--aurora-start)] to-[var(--aurora-end)] flex items-center justify-center text-white text-xs font-bold">
+                        {m.name?.[0]?.toUpperCase() || 'U'}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">{m.name}</p>
+                        <p className="text-xs text-muted-foreground">{m.email}</p>
+                      </div>
+                      <Badge variant="secondary" className="text-xs">
+                        {m.status === 'accepted' ? '✓ Bergabung' : m.status === 'pending' ? '⏳ Menunggu' : m.role}
+                      </Badge>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Trip List */}
         {tripsLoading ? (
@@ -502,7 +631,7 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
               <MapIcon className="w-10 h-10 mx-auto mb-3 opacity-20" />
               <p className="text-sm font-medium mb-1">Belum ada itinerary</p>
               <p className="text-xs opacity-70 mb-4">Generate itinerary dengan AI atau tambah manual</p>
-              <Button variant="gradient" size="sm" className="gap-2 shadow-lg shadow-purple-500/30" onClick={() => setAiPanelOpen(true)}>
+              <Button variant="gradient" size="sm" className="gap-2 shadow-lg shadow-purple-500/30" onClick={() => navigateTo("ai")}>
                 <Sparkles className="w-4 h-4" />
                 ✨ Generate dengan AI
               </Button>
@@ -612,7 +741,7 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
               {selectedTrip ? "Tambah destinasi atau generate dengan AI" : "Atau buat trip baru untuk memulai"}
             </p>
             {selectedTrip && (
-              <Button variant="gradient" size="sm" className="mt-4 gap-2 shadow-lg shadow-purple-500/30" onClick={() => setAiPanelOpen(true)}>
+              <Button variant="gradient" size="sm" className="mt-4 gap-2 shadow-lg shadow-purple-500/30" onClick={() => navigateTo("ai")}>
                 <Sparkles className="w-4 h-4" />
                 ✨ Generate dengan AI
               </Button>
@@ -629,7 +758,7 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
             onClick={() => setAiPanelOpen(true)}
           >
             <Sparkles className="w-5 h-5" />
-            <span className="font-semibold">✨ Generate dengan AI</span>
+            <span className="font-semibold">AI Assistant</span>
           </Button>
         </div>
 
