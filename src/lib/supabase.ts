@@ -145,6 +145,24 @@ export async function createTrip(trip: Omit<Trip, 'id' | 'user_id' | 'created_at
     .single()
 
   if (error) throw error
+
+  // Auto-add the owner to trip_members with accepted status
+  const profile = await supabase
+    .from('profiles')
+    .select('name, email')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  await supabase.from('trip_members').upsert({
+    trip_id: data.id,
+    user_id: user.id,
+    name: profile.data?.name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Owner',
+    email: profile.data?.email || user.email || '',
+    role: 'owner',
+    status: 'accepted',
+    invited_by: user.id,
+  }, { onConflict: 'trip_id,user_id' })
+
   return data as Trip
 }
 
@@ -430,6 +448,7 @@ export async function inviteTripMember(tripId: string, email: string, tripName: 
   }
 
   // Create trip_members entry (pending)
+  // DB role constraint: ONLY 'owner' | 'editor' | 'viewer' allowed
   const { error: memberErr } = await supabase
     .from('trip_members')
     .insert({
@@ -437,7 +456,7 @@ export async function inviteTripMember(tripId: string, email: string, tripName: 
       user_id: invitee.id,
       name: invitee.name || email.split('@')[0],
       email: invitee.email || email,
-      role: 'member',
+      role: 'viewer',       // was 'member' — not allowed by DB constraint
       status: 'pending',
       invited_by: user.id,
     })

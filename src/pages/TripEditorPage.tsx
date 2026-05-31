@@ -827,7 +827,7 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
                         <p className="text-xs text-muted-foreground">{m.email}</p>
                       </div>
                       <Badge variant="secondary" className="text-xs">
-                        {m.status === 'accepted' ? '✓ Bergabung' : m.status === 'pending' ? '⏳ Menunggu' : m.role}
+                        {m.role === 'owner' ? '👑 Pemilik' : m.status === 'accepted' ? '✓ Bergabung' : m.status === 'pending' ? '⏳ Menunggu' : m.role}
                       </Badge>
                     </div>
                   ))
