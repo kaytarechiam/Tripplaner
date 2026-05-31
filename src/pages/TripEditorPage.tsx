@@ -16,7 +16,7 @@ import { Label } from "../components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog"
 import { cn } from "@/lib/utils"
 import { useState, useEffect, useRef, useCallback } from "react"
-import { getTrips, createTrip, getItinerary, addItineraryItem, updateTrip, getTripMembers, inviteTripMember } from "../lib/supabase"
+import { getTrips, createTrip, getItinerary, addItineraryItem, updateItineraryItem, deleteItineraryItem, updateTrip, getTripMembers, inviteTripMember } from "../lib/supabase"
 import { searchPlaces, getWeather } from "../lib/api"
 import { TripMap } from "../components/TripMap"
 import { TripAIPanel } from "../components/TripAIPanel"
@@ -81,7 +81,14 @@ function getBookingPlatforms(item: ItineraryItem) {
 }
 
 // ─── Destination Card ─────────────────────────────────────
-function DestinationCard({ item, dayIndex, index, onSelect }: { item: ItineraryItem; dayIndex: number; index: number; onSelect: (item: ItineraryItem) => void }) {
+function DestinationCard({
+  item, dayIndex, index, onSelect, onEdit, onDelete
+}: {
+  item: ItineraryItem; dayIndex: number; index: number
+  onSelect: (item: ItineraryItem) => void
+  onEdit: (item: ItineraryItem) => void
+  onDelete: (id: string) => void
+}) {
   const type = destinationTypes[item.category] || destinationTypes.landmark
   const Icon = type.icon
   const bookingPlatforms = getBookingPlatforms(item)
@@ -112,9 +119,16 @@ function DestinationCard({ item, dayIndex, index, onSelect }: { item: ItineraryI
               <h4 className="font-semibold text-base">{item.title}</h4>
             </div>
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button className="p-1 rounded hover:bg-white/10" onClick={(e) => e.stopPropagation()}><Edit3 className="w-4 h-4 text-muted-foreground" /></button>
-              <button className="p-1 rounded hover:bg-white/10" onClick={(e) => e.stopPropagation()}><Copy className="w-4 h-4 text-muted-foreground" /></button>
-              <button className="p-1 rounded hover:bg-red-500/10" onClick={(e) => e.stopPropagation()}><Trash2 className="w-4 h-4 text-red-400" /></button>
+              <button
+                className="p-1.5 rounded-lg hover:bg-blue-500/10 hover:text-blue-500 transition-colors"
+                title="Edit tempat"
+                onClick={(e) => { e.stopPropagation(); onEdit(item) }}
+              ><Edit3 className="w-4 h-4 text-muted-foreground" /></button>
+              <button
+                className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors"
+                title="Hapus tempat"
+                onClick={(e) => { e.stopPropagation(); onDelete(item.id) }}
+              ><Trash2 className="w-4 h-4 text-red-400" /></button>
             </div>
           </div>
 
@@ -155,7 +169,20 @@ function DestinationCard({ item, dayIndex, index, onSelect }: { item: ItineraryI
   )
 }
 
-// ─── Add Place Modal ──────────────────────────────────────
+// ─── Add / Edit Place Modal ───────────────────────────────
+// Category reverse-map: DB value → frontend value
+const DB_TO_FRONTEND_CAT: Record<string, string> = {
+  accommodation: "hotel",
+  attraction: "landmark",
+  food: "food",
+  transport: "transport",
+  hotel: "hotel",
+  landmark: "landmark",
+  nature: "nature",
+  activity: "activity",
+  shopping: "shopping",
+}
+
 interface AddPlaceModalProps {
   open: boolean
   onClose: () => void
@@ -164,6 +191,7 @@ interface AddPlaceModalProps {
   defaultDay?: number
   onAdded: () => void
   prefill?: { name: string; location: string; lat: string; lon: string } | null
+  editItem?: ItineraryItem | null  // if provided = edit mode
 }
 
 const CATEGORIES = [
@@ -176,7 +204,8 @@ const CATEGORIES = [
   { value: "transport", label: "🚗 Transport", dbValue: "transport" },
 ]
 
-function AddPlaceModal({ open, onClose, tripId, tripDays, defaultDay = 1, onAdded, prefill }: AddPlaceModalProps) {
+function AddPlaceModal({ open, onClose, tripId, tripDays, defaultDay = 1, onAdded, prefill, editItem }: AddPlaceModalProps) {
+  const isEditMode = !!editItem
   const [name, setName] = useState("")
   const [category, setCategory] = useState("activity")
   const [day, setDay] = useState(defaultDay)
@@ -195,9 +224,26 @@ function AddPlaceModal({ open, onClose, tripId, tripDays, defaultDay = 1, onAdde
   const [showSearch, setShowSearch] = useState(false)
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Apply prefill when it changes
+  // Pre-fill from editItem (edit mode)
   useEffect(() => {
-    if (prefill) {
+    if (editItem && open) {
+      setName(editItem.title || "")
+      setSearchQuery(editItem.title || "")
+      setCategory(DB_TO_FRONTEND_CAT[editItem.category] || "activity")
+      setDay(editItem.day || defaultDay)
+      setTime(editItem.time || "09:00")
+      setLocation(editItem.location || "")
+      setNotes(editItem.notes || "")
+      setDuration(editItem.duration_minutes || 60)
+      setLat(editItem.latitude || null)
+      setLng(editItem.longitude || null)
+      setError("")
+    }
+  }, [editItem, open])
+
+  // Apply prefill when it changes (add mode)
+  useEffect(() => {
+    if (prefill && !editItem) {
       setName(prefill.name)
       setLocation(prefill.location)
       setLat(parseFloat(prefill.lat) || null)
@@ -237,26 +283,44 @@ function AddPlaceModal({ open, onClose, tripId, tripDays, defaultDay = 1, onAdde
     setLoading(true)
     setError("")
     try {
-      await addItineraryItem({
-        trip_id: tripId,
-        day,
-        time,
-        title: name.trim(),
-        location: location.trim() || undefined,
-        latitude: lat || undefined,
-        longitude: lng || undefined,
-        category: category as any,  // addItineraryItem maps to DB values internally
-        duration_minutes: duration,
-        notes: notes.trim() || undefined,
-        sort_order: 999,
-      })
+      if (isEditMode && editItem) {
+        // Edit mode: update existing item
+        await updateItineraryItem(editItem.id, {
+          day,
+          time,
+          title: name.trim(),
+          location: location.trim() || undefined,
+          latitude: lat || undefined,
+          longitude: lng || undefined,
+          category: category as any,
+          duration_minutes: duration,
+          notes: notes.trim() || undefined,
+        })
+      } else {
+        // Add mode: create new item
+        await addItineraryItem({
+          trip_id: tripId,
+          day,
+          time,
+          title: name.trim(),
+          location: location.trim() || undefined,
+          latitude: lat || undefined,
+          longitude: lng || undefined,
+          category: category as any,
+          duration_minutes: duration,
+          notes: notes.trim() || undefined,
+          sort_order: 999,
+        })
+      }
       onAdded()
       onClose()
-      // Reset
-      setName(""); setSearchQuery(""); setLocation(""); setLat(null); setLng(null)
-      setNotes(""); setTime("09:00"); setDuration(60); setDay(defaultDay); setCategory("activity")
+      if (!isEditMode) {
+        // Reset only in add mode
+        setName(""); setSearchQuery(""); setLocation(""); setLat(null); setLng(null)
+        setNotes(""); setTime("09:00"); setDuration(60); setDay(defaultDay); setCategory("activity")
+      }
     } catch (err: any) {
-      setError(err.message || "Gagal menambahkan tempat")
+      setError(err.message || (isEditMode ? "Gagal menyimpan perubahan" : "Gagal menambahkan tempat"))
     } finally {
       setLoading(false)
     }
@@ -277,8 +341,10 @@ function AddPlaceModal({ open, onClose, tripId, tripDays, defaultDay = 1, onAdde
         <div className="p-6 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-lg flex items-center gap-2">
-              <Plus className="w-5 h-5 text-[var(--aurora-start)]" />
-              Tambah Tempat
+              {isEditMode
+                ? <><Edit3 className="w-5 h-5 text-blue-500" />Edit Tempat</>
+                : <><Plus className="w-5 h-5 text-[var(--aurora-start)]" />Tambah Tempat</>
+              }
             </h3>
             <button onClick={onClose} className="p-2 rounded-lg hover:bg-white/10">
               <X className="w-4 h-4" />
@@ -404,8 +470,10 @@ function AddPlaceModal({ open, onClose, tripId, tripDays, defaultDay = 1, onAdde
             <div className="flex gap-2 pt-1">
               <Button type="button" variant="outline" className="flex-1" onClick={onClose}>Batal</Button>
               <Button type="submit" variant="gradient" className="flex-1" disabled={loading}>
-                {loading ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Plus className="w-4 h-4 mr-1" />}
-                Tambahkan
+                {loading ? <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                  : isEditMode ? <Edit3 className="w-4 h-4 mr-1" />
+                  : <Plus className="w-4 h-4 mr-1" />}
+                {isEditMode ? "Simpan Perubahan" : "Tambahkan"}
               </Button>
             </div>
           </form>
@@ -560,6 +628,8 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
   const [selectedItem, setSelectedItem] = useState<ItineraryItem | null>(null)
   const [addPlaceOpen, setAddPlaceOpen] = useState(false)
   const [addPrefill, setAddPrefill] = useState<{ name: string; location: string; lat: string; lon: string } | null>(null)
+  const [editItem, setEditItem] = useState<ItineraryItem | null>(null)
+  const [deletingItemId, setDeletingItemId] = useState<string | null>(null)
 
   // Place search state
   const [placeQuery, setPlaceQuery] = useState("")
@@ -677,6 +747,37 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
     setTrips(prev => [trip, ...prev])
     setSelectedTrip(trip)
     setItineraryItems([])
+  }, [])
+
+  const handleEditItem = useCallback((item: ItineraryItem) => {
+    setEditItem(item)
+    setAddPlaceOpen(true)
+    setAddPrefill(null)
+  }, [])
+
+  const handleDeleteItem = useCallback(async (itemId: string) => {
+    if (!window.confirm("Hapus tempat ini dari itinerary?")) return
+    setDeletingItemId(itemId)
+    try {
+      await deleteItineraryItem(itemId)
+      setItineraryItems(prev => prev.filter(i => i.id !== itemId))
+    } catch (err) {
+      console.error("Delete item error:", err)
+    } finally {
+      setDeletingItemId(null)
+    }
+  }, [])
+
+  // Called by AI panel when it wants to add a place — opens AddPlaceModal with prefill
+  const handleAIRequestAdd = useCallback((prefill: { name: string; day: number; time: string; location?: string; category?: string; notes?: string }) => {
+    setEditItem(null)
+    setAddPrefill({
+      name: prefill.name,
+      location: prefill.location || "",
+      lat: "",
+      lon: "",
+    })
+    setAddPlaceOpen(true)
   }, [])
 
   const handleInviteMember = async () => {
@@ -998,7 +1099,15 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
           ) : currentDay && currentDay.items.length > 0 ? (
             <>
               {currentDay.items.map((item, i) => (
-                <DestinationCard key={item.id} item={item} dayIndex={selectedDay} index={i} onSelect={setSelectedItem} />
+                <DestinationCard
+                  key={item.id}
+                  item={item}
+                  dayIndex={selectedDay}
+                  index={i}
+                  onSelect={setSelectedItem}
+                  onEdit={handleEditItem}
+                  onDelete={handleDeleteItem}
+                />
               ))}
             </>
           ) : trips.length > 0 && selectedTrip ? (
@@ -1137,6 +1246,7 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
             itineraryItems={itineraryItems}
             onItemsChanged={refreshItems}
             currentDay={selectedDay}
+            onRequestAdd={handleAIRequestAdd}
           />
         )}
 
@@ -1148,17 +1258,18 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
         />
       </div>
 
-      {/* Add Place Modal */}
+      {/* Add / Edit Place Modal */}
       <AnimatePresence>
         {addPlaceOpen && selectedTrip && (
           <AddPlaceModal
             open={addPlaceOpen}
-            onClose={() => { setAddPlaceOpen(false); setAddPrefill(null) }}
+            onClose={() => { setAddPlaceOpen(false); setAddPrefill(null); setEditItem(null) }}
             tripId={selectedTrip.id}
             tripDays={tripDays}
             defaultDay={dayGroups[selectedDay]?.day || 1}
             onAdded={refreshItems}
             prefill={addPrefill}
+            editItem={editItem}
           />
         )}
       </AnimatePresence>

@@ -11,9 +11,9 @@ import { Avatar, AvatarFallback } from "../components/ui/avatar"
 import { Progress } from "../components/ui/progress"
 import { cn } from "@/lib/utils"
 import { useState, useEffect } from "react"
-import { getTrips, getBucketList, getSession } from "../lib/supabase"
+import { getTrips, getSavedTrips, getSession } from "../lib/supabase"
 import { supabase } from "../lib/supabase"
-import type { Trip, BucketListItem } from "../lib/supabase"
+import type { Trip, SavedTrip } from "../lib/supabase"
 
 type Page = "landing" | "login" | "register" | "home" | "editor" | "ai" | "splitbill" | "explore" | "profile" | "achievements" | "bucketlist" | "settings" | "notifications" | "trips"
 
@@ -47,7 +47,7 @@ function useDashboardData() {
   const [trips, setTrips] = useState<Trip[]>([])
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
   const [reminders, setReminders] = useState<ReminderItem[]>([])
-  const [bucketList, setBucketList] = useState<BucketListItem[]>([])
+  const [bucketList, setBucketList] = useState<SavedTrip[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(true)
 
@@ -114,16 +114,12 @@ function useDashboardData() {
               setNotifications([])
             }
 
-            // Fetch bucket list
-            const { data: bucketData } = await supabase
-              .from("bucket_list")
-              .select("id, place_name, country, priority, notes")
-              .eq("user_id", userId)
-              .order("created_at", { ascending: false })
-              .limit(5)
-
-            if (bucketData) {
-              setBucketList(bucketData as BucketListItem[])
+            // Fetch saved trips (Disimpan from Explorer)
+            try {
+              const savedData = await getSavedTrips()
+              setBucketList(savedData.slice(0, 5))
+            } catch {
+              setBucketList([])
             }
           } else {
             setNotifications([])
@@ -527,10 +523,10 @@ export function Dashboard({ navigateTo, onLogout, user }: DashboardProps) {
               <div className="flex items-center justify-between">
                 <h3 className="font-bold flex items-center gap-2">
                   <MapPin className="w-4 h-4 text-rose-400" />
-                  Bucket List
+                  Trip Disimpan
                 </h3>
                 <Button variant="ghost" size="sm" onClick={() => navigateTo("bucketlist")}>
-                  Lihat
+                  Lihat Semua
                 </Button>
               </div>
               {loading ? (
@@ -539,24 +535,23 @@ export function Dashboard({ navigateTo, onLogout, user }: DashboardProps) {
                 </div>
               ) : bucketList.length > 0 ? (
                 <div className="space-y-2">
-                  {bucketList.slice(0, 5).map((item, i) => (
+                  {bucketList.map((item, i) => (
                     <div key={item.id} className="flex items-center gap-2 text-sm">
-                      <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] text-white shrink-0 ${
-                        item.priority === "high" ? "bg-red-500" :
-                        item.priority === "medium" ? "bg-amber-500" : "bg-gray-400"
-                      }`}>
+                      <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] text-white shrink-0 bg-gradient-to-br from-[var(--aurora-start)] to-[var(--aurora-end)]">
                         {i + 1}
                       </span>
-                      <span className="font-medium">{item.place_name}</span>
-                      <span className="text-xs text-muted-foreground ml-auto">{item.country}</span>
+                      <div className="flex-1 min-w-0">
+                        <span className="font-medium truncate block">{item.name}</span>
+                        <span className="text-xs text-muted-foreground truncate block">{item.destination} · {item.days} hari</span>
+                      </div>
                     </div>
                   ))}
                 </div>
               ) : (
                 <div className="text-center py-2">
-                  <p className="text-sm text-muted-foreground">Bucket list kosong</p>
-                  <Button variant="ghost" size="sm" className="mt-2" onClick={() => navigateTo("bucketlist")}>
-                    + Tambah tempat
+                  <p className="text-sm text-muted-foreground">Belum ada trip yang disimpan</p>
+                  <Button variant="ghost" size="sm" className="mt-2" onClick={() => navigateTo("explore")}>
+                    Jelajahi Trip
                   </Button>
                 </div>
               )}

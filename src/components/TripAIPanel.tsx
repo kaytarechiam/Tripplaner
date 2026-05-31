@@ -21,6 +21,7 @@ interface TripAIPanelProps {
   itineraryItems: ItineraryItem[]
   onItemsChanged: () => void
   currentDay?: number
+  onRequestAdd?: (prefill: { name: string; day: number; time: string; location?: string; category?: string; notes?: string }) => void
 }
 
 interface ChatBubble {
@@ -354,6 +355,7 @@ export function TripAIPanel({
   itineraryItems,
   onItemsChanged,
   currentDay,
+  onRequestAdd,
 }: TripAIPanelProps) {
   const [messages, setMessages] = useState<ChatBubble[]>([])
   const [input, setInput] = useState("")
@@ -379,27 +381,41 @@ export function TripAIPanel({
     }
   }, [open])
 
-  const applyActions = async (actions: any[]) => {
-    if (!actions?.length) return 0
+  const applyActions = async (actions: any[]): Promise<{ applied: number; pendingAdds: number }> => {
+    if (!actions?.length) return { applied: 0, pendingAdds: 0 }
     let applied = 0
+    let pendingAdds = 0
     for (const action of actions) {
       try {
         if (action.type === 'add' && action.item) {
-          await addItineraryItem({
-            trip_id: trip.id,
-            day: action.item.day || 1,
-            time: action.item.time || '09:00',
-            title: action.item.title || 'Tempat Baru',
-            description: action.item.description,
-            location: action.item.location,
-            latitude: action.item.latitude || null,
-            longitude: action.item.longitude || null,
-            category: action.item.category || 'activity',
-            duration_minutes: action.item.duration_minutes || 60,
-            notes: action.item.notes,
-            sort_order: 999,
-          })
-          applied++
+          if (onRequestAdd) {
+            // Open AddPlaceModal so user can review day/time before adding
+            onRequestAdd({
+              name: action.item.title || action.item.name || 'Tempat Baru',
+              day: action.item.day || currentDay || 1,
+              time: action.item.time || '09:00',
+              location: action.item.location,
+              category: action.item.category,
+              notes: action.item.notes,
+            })
+            pendingAdds++
+          } else {
+            // Fallback: auto-apply directly
+            await addItineraryItem({
+              trip_id: trip.id,
+              day: action.item.day || 1,
+              time: action.item.time || '09:00',
+              title: action.item.title || 'Tempat Baru',
+              location: action.item.location,
+              latitude: action.item.latitude || null,
+              longitude: action.item.longitude || null,
+              category: action.item.category || 'activity',
+              duration_minutes: action.item.duration_minutes || 60,
+              notes: action.item.notes,
+              sort_order: 999,
+            })
+            applied++
+          }
         } else if (action.type === 'update' && action.itemId && action.changes) {
           await updateItineraryItem(action.itemId, action.changes)
           applied++
@@ -412,7 +428,7 @@ export function TripAIPanel({
       }
     }
     if (applied > 0) onItemsChanged()
-    return applied
+    return { applied, pendingAdds }
   }
 
   const sendMessage = async () => {
@@ -456,14 +472,18 @@ export function TripAIPanel({
 
       // Apply actions first, then update message with result
       let appliedCount = 0
+      let pendingAdds = 0
       if (actions.length > 0) {
-        appliedCount = await applyActions(actions)
+        const result = await applyActions(actions)
+        appliedCount = result?.applied ?? 0
+        pendingAdds = result?.pendingAdds ?? 0
       }
 
       // Build actionSummary text
-      const actionSummary = appliedCount > 0
-        ? `\n\n✅ ${appliedCount} perubahan diterapkan ke itinerary.`
-        : ''
+      const parts: string[] = []
+      if (appliedCount > 0) parts.push(`✅ ${appliedCount} perubahan diterapkan.`)
+      if (pendingAdds > 0) parts.push(`📝 ${pendingAdds} tempat menunggu konfirmasi — cek form yang terbuka!`)
+      const actionSummary = parts.length > 0 ? `\n\n${parts.join(' ')}` : ''
 
       setMessages(prev => prev.map(m =>
         m.id === thinkingId
