@@ -83,15 +83,15 @@ export function TripDetailModal({ trip, onClose, onCopied }: TripDetailModalProp
     // Load comments
     getComments(trip.id).then(setComments)
 
-    // Check if already saved
+    // Check if already saved (mock trips have null original_trip_id, matched by name)
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return
-      supabase!.from('saved_trips')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('original_trip_id', trip.id)
-        .maybeSingle()
-        .then(({ data }) => { if (data) setSaved(true) })
+      const isMock = trip.id.startsWith('mock-')
+      const query = supabase!.from('saved_trips').select('id').eq('user_id', user.id)
+      const filtered = isMock
+        ? query.is('original_trip_id', null).eq('name', trip.name)
+        : query.eq('original_trip_id', trip.id)
+      filtered.maybeSingle().then(({ data }) => { if (data) setSaved(true) })
     })
   }, [trip?.id])
 
@@ -106,39 +106,68 @@ export function TripDetailModal({ trip, onClose, onCopied }: TripDetailModalProp
     }
   }
 
-  // Simpan = bookmark to Disimpan tab (saved_trips with original_trip_id)
+  // Simpan = bookmark to Disimpan tab (saved_trips)
+  // Mock trips use original_trip_id = null, identified by name+user_id
   const handleSimpan = async () => {
     if (!supabase) return
-    if (trip.id.startsWith('mock-')) {
-      setError("Trip ini hanya contoh. Gunakan 'Salin ke Trip Saya' untuk membuat versi milikmu!")
-      return
-    }
     setSaveLoading(true)
+    setError("")
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { setError("Login dulu untuk menyimpan trip"); return }
 
+      const isMock = trip.id.startsWith('mock-')
+
       if (saved) {
         // Unsave
-        await supabase.from('saved_trips')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('original_trip_id', trip.id)
+        if (isMock) {
+          await supabase.from('saved_trips')
+            .delete()
+            .eq('user_id', user.id)
+            .is('original_trip_id', null)
+            .eq('name', trip.name)
+        } else {
+          await supabase.from('saved_trips')
+            .delete()
+            .eq('user_id', user.id)
+            .eq('original_trip_id', trip.id)
+        }
         setSaved(false)
       } else {
-        // Save bookmark
-        await supabase.from('saved_trips').upsert({
-          user_id: user.id,
-          original_trip_id: trip.id,
-          name: trip.name,
-          destination: trip.destination,
-          days: trip.days,
-          tags: trip.tags,
-        }, { onConflict: 'user_id,original_trip_id' })
+        if (isMock) {
+          // Check for existing save first (prevent duplicates)
+          const { data: existing } = await supabase.from('saved_trips')
+            .select('id')
+            .eq('user_id', user.id)
+            .is('original_trip_id', null)
+            .eq('name', trip.name)
+            .maybeSingle()
+
+          if (!existing) {
+            await supabase.from('saved_trips').insert({
+              user_id: user.id,
+              original_trip_id: null,
+              name: trip.name,
+              destination: trip.destination,
+              days: trip.days,
+              tags: trip.tags,
+            })
+          }
+        } else {
+          await supabase.from('saved_trips').upsert({
+            user_id: user.id,
+            original_trip_id: trip.id,
+            name: trip.name,
+            destination: trip.destination,
+            days: trip.days,
+            tags: trip.tags,
+          }, { onConflict: 'user_id,original_trip_id' })
+        }
         setSaved(true)
       }
     } catch (err: unknown) {
       console.error("Simpan error:", err)
+      setError("Gagal menyimpan. Coba lagi.")
     } finally {
       setSaveLoading(false)
     }
