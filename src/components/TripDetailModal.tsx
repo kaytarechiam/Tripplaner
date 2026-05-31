@@ -162,7 +162,10 @@ export function TripDetailModal({ trip, onClose, onCopied }: TripDetailModalProp
       setTimeout(() => { onCopied?.(); onClose() }, 1200)
     } catch (err: unknown) {
       console.error("Copy trip error:", err)
-      setError(err instanceof Error ? err.message : "Gagal menyalin trip. Coba lagi.")
+      const msg = err instanceof Error
+        ? err.message
+        : (err as any)?.message || (err as any)?.details || "Gagal menyalin trip. Coba lagi."
+      setError(msg)
     } finally {
       setCopyLoading(false)
     }
@@ -170,16 +173,29 @@ export function TripDetailModal({ trip, onClose, onCopied }: TripDetailModalProp
 
   const handleAddComment = async () => {
     if (!newComment.trim() || !supabase) return
+    // Mock trips have no real DB entry — can't save comments
+    if (trip.id.startsWith('mock-')) {
+      setError("Trip ini adalah contoh dan tidak mendukung komentar.")
+      return
+    }
     setCommentLoading(true)
+    setError("")
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setError("Login dulu untuk berkomentar"); return }
-      const name = user.user_metadata?.full_name || user.email?.split("@")[0] || "User"
+      if (!user) {
+        setError("Login dulu untuk berkomentar")
+        return
+      }
+      const name = user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split("@")[0] || "User"
       const comment = await addComment(trip.id, newComment.trim(), name)
       setComments(prev => [...prev, comment])
       setNewComment("")
     } catch (err: unknown) {
       console.error("Comment error:", err)
+      const msg = err instanceof Error
+        ? err.message
+        : (err as any)?.message || "Gagal mengirim komentar. Coba lagi."
+      setError(msg)
     } finally {
       setCommentLoading(false)
     }
