@@ -1,4 +1,4 @@
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import {
   Globe, Search, TrendingUp, Heart, MessageSquare, Share2,
   MapPin, Calendar, Users, Star, SlidersHorizontal,
@@ -416,6 +416,7 @@ export function Explore({ navigateTo }: ExploreProps) {
   const [trips, setTrips] = useState<PublicTrip[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedTrip, setSelectedTrip] = useState<PublicTrip | null>(null)
+  const [saveToast, setSaveToast] = useState<string | null>(null)
 
   // Load saved trip IDs for heart state on mount
   useEffect(() => {
@@ -438,64 +439,70 @@ export function Explore({ navigateTo }: ExploreProps) {
       setLoading(false)
       return
     }
-    supabase
-      .from('trips')
-      .select(`
-        id,
-        title,
-        name,
-        destination,
-        start_date,
-        end_date,
-        status,
-        cover_gradient,
-        tags,
-        profiles(name, avatar_url)
-      `)
-      .eq('is_public', true)
-      .order('created_at', { ascending: false })
-      .limit(30)
-      .then(({ data, error }) => {
-        if (error || !data || data.length === 0) {
-          // No public trips yet — fallback to mock data
-          setTrips(MOCK_TRIPS)
-        } else {
-          setTrips(data.map((t: any, i: number) => {
-            const tripName = t.title || t.name || 'Trip'
-            const profile = Array.isArray(t.profiles) ? t.profiles[0] : t.profiles
-            const authorName = profile?.name || 'traveler'
-            const authorAvatar = authorName.split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)
-            const rawTags: string[] = Array.isArray(t.tags) && t.tags.length > 0 ? t.tags : ['all']
-            return {
-              id: t.id,
-              trip_id: t.id,
-              name: tripName,
-              destination: t.destination || '',
-              start_date: t.start_date,
-              end_date: t.end_date,
-              status: t.status,
-              days: t.start_date && t.end_date
-                ? Math.max(1, Math.ceil((new Date(t.end_date).getTime() - new Date(t.start_date).getTime()) / 86400000) + 1)
-                : 3,
-              places: 0,
-              likes: Math.floor(Math.random() * 500) + 50,
-              comments: Math.floor(Math.random() * 80) + 5,
-              rating: parseFloat((4.0 + Math.random()).toFixed(1)),
-              gradient: t.cover_gradient || GRADIENTS[i % GRADIENTS.length],
-              tags: rawTags,
-              author: authorName,
-              authorAvatar,
-              image: getDestinationImage(t.destination || '') || undefined,
-            } as PublicTrip
-          }))
-        }
-        setLoading(false)
-      })
+    // Fetch trips + their like/comment counts in parallel
+    Promise.all([
+      supabase
+        .from('trips')
+        .select(`id, title, name, destination, start_date, end_date, status, cover_gradient, tags, profiles(name, avatar_url)`)
+        .eq('is_public', true)
+        .order('created_at', { ascending: false })
+        .limit(30),
+      supabase.from('trip_likes').select('trip_id'),
+      supabase.from('trip_comments').select('trip_id'),
+    ]).then(([{ data, error }, { data: likesData }, { data: commentsData }]) => {
+      if (error || !data || data.length === 0) {
+        setTrips(MOCK_TRIPS)
+      } else {
+        // Build count maps
+        const likeMap: Record<string, number> = {}
+        const commentMap: Record<string, number> = {}
+        ;(likesData || []).forEach((r: any) => { likeMap[r.trip_id] = (likeMap[r.trip_id] || 0) + 1 })
+        ;(commentsData || []).forEach((r: any) => { commentMap[r.trip_id] = (commentMap[r.trip_id] || 0) + 1 })
+
+        setTrips(data.map((t: any, i: number) => {
+          const tripName = t.title || t.name || 'Trip'
+          const profile = Array.isArray(t.profiles) ? t.profiles[0] : t.profiles
+          const authorName = profile?.name || 'traveler'
+          const authorAvatar = authorName.split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)
+          const rawTags: string[] = Array.isArray(t.tags) && t.tags.length > 0 ? t.tags : ['all']
+          return {
+            id: t.id,
+            trip_id: t.id,
+            name: tripName,
+            destination: t.destination || '',
+            start_date: t.start_date,
+            end_date: t.end_date,
+            status: t.status,
+            days: t.start_date && t.end_date
+              ? Math.max(1, Math.ceil((new Date(t.end_date).getTime() - new Date(t.start_date).getTime()) / 86400000) + 1)
+              : 3,
+            places: 0,
+            likes: likeMap[t.id] || 0,
+            comments: commentMap[t.id] || 0,
+            rating: parseFloat((4.0 + Math.random() * 0.9).toFixed(1)),
+            gradient: t.cover_gradient || GRADIENTS[i % GRADIENTS.length],
+            tags: rawTags,
+            author: authorName,
+            authorAvatar,
+            image: getDestinationImage(t.destination || '') || undefined,
+          } as PublicTrip
+        }))
+      }
+      setLoading(false)
+    })
   }, [])
+
+  const showToast = (msg: string) => {
+    setSaveToast(msg)
+    setTimeout(() => setSaveToast(null), 3000)
+  }
 
   const toggleSave = async (id: string) => {
     // Can't save mock trips (invalid UUID)
-    if (id.startsWith('mock-')) return
+    if (id.startsWith('mock-')) {
+      showToast("Trip ini hanya contoh. Salin ke tripmu untuk menyimpannya! ✨")
+      return
+    }
     const isSaved = savedTripIds.includes(id)
     setSavedTripIds(prev =>
       prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
@@ -509,7 +516,6 @@ export function Explore({ navigateTo }: ExploreProps) {
       const trip = trips.find(t => t.id === id)
       if (!trip) return
       if (!isSaved) {
-        // Save to saved_trips (Trip Saya feature)
         await supabase.from("saved_trips").upsert({
           user_id: userId,
           original_trip_id: id,
@@ -518,13 +524,15 @@ export function Explore({ navigateTo }: ExploreProps) {
           days: trip.days,
           created_at: new Date().toISOString(),
         }, { onConflict: 'user_id,original_trip_id' })
+        showToast("✅ Trip disimpan ke Trip Saya → Disimpan")
       } else {
-        // Remove from saved_trips
         await supabase.from("saved_trips").delete()
           .match({ user_id: userId, original_trip_id: id })
+        showToast("Trip dihapus dari simpanan")
       }
     } catch (err) {
       console.error("Toggle save error:", err)
+      showToast("Gagal menyimpan, coba login dulu")
     }
   }
 
@@ -636,31 +644,24 @@ export function Explore({ navigateTo }: ExploreProps) {
                 onClick={() => setSelectedTrip(trip)}
               >
                 {/* Image */}
-                <div className={`aspect-[4/3] rounded-t-2xl relative overflow-hidden ${!trip.image && !getDestinationImage(trip.destination) ? `bg-gradient-to-br ${trip.gradient}` : ""}`}>
+                <div className="aspect-[4/3] rounded-t-2xl relative overflow-hidden">
+                  {/* Always-visible gradient background */}
+                  <div className={cn("absolute inset-0 bg-gradient-to-br", trip.gradient)} />
+                  <div className="absolute inset-0 flex items-center justify-center opacity-20">
+                    <span className="text-7xl">🌏</span>
+                  </div>
+                  {/* Image overlays gradient */}
                   {(() => {
                     const imgSrc = trip.image || getDestinationImage(trip.destination)
                     return imgSrc ? (
                       <img
                         src={imgSrc}
                         alt={trip.name}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          e.currentTarget.style.display = "none"
-                          e.currentTarget.nextElementSibling?.classList.remove("hidden")
-                        }}
+                        className="absolute inset-0 w-full h-full object-cover"
+                        onError={(e) => { e.currentTarget.style.display = "none" }}
                       />
                     ) : null
                   })()}
-                  {/* Fallback gradient (hidden if image loads) */}
-                  <div className={cn("absolute inset-0 bg-gradient-to-br", trip.gradient, "hidden")} />
-                  {!trip.image && !getDestinationImage(trip.destination) && (
-                    <>
-                      <div className="absolute inset-0 bg-black/10" />
-                      <div className="absolute inset-0 flex items-center justify-center opacity-20">
-                        <span className="text-7xl">🌏</span>
-                      </div>
-                    </>
-                  )}
 
                   {/* Actions */}
                   <div className="absolute top-3 right-3 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -759,6 +760,20 @@ export function Explore({ navigateTo }: ExploreProps) {
         trip={selectedTrip}
         onClose={() => setSelectedTrip(null)}
       />
+
+      {/* Save toast notification */}
+      <AnimatePresence>
+        {saveToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl bg-foreground text-background text-sm font-medium shadow-xl"
+          >
+            {saveToast}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

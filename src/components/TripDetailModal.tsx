@@ -108,7 +108,11 @@ export function TripDetailModal({ trip, onClose, onCopied }: TripDetailModalProp
 
   // Simpan = bookmark to Disimpan tab (saved_trips with original_trip_id)
   const handleSimpan = async () => {
-    if (!supabase || trip.id.startsWith('mock-')) return
+    if (!supabase) return
+    if (trip.id.startsWith('mock-')) {
+      setError("Trip ini hanya contoh. Gunakan 'Salin ke Trip Saya' untuk membuat versi milikmu!")
+      return
+    }
     setSaveLoading(true)
     try {
       const { data: { user } } = await supabase.auth.getUser()
@@ -216,10 +220,12 @@ export function TripDetailModal({ trip, onClose, onCopied }: TripDetailModalProp
           {/* Cover */}
           <div className={cn(
             "aspect-video rounded-xl -mx-6 -mt-6 mb-4 relative overflow-hidden",
-            trip.image ? "" : `bg-gradient-to-br ${trip.gradient}`
+            `bg-gradient-to-br ${trip.gradient}`
           )}>
+            {/* Image overlays gradient */}
             {trip.image && (
-              <img src={trip.image} alt={trip.name} className="w-full h-full object-cover" />
+              <img src={trip.image} alt={trip.name} className="absolute inset-0 w-full h-full object-cover"
+                onError={(e) => { e.currentTarget.style.display = "none" }} />
             )}
             <div className="absolute inset-0 bg-black/20" />
             <div className="absolute bottom-3 left-3 flex gap-2">

@@ -1,11 +1,11 @@
 // src/pages/BucketList.tsx — "Trip Saya"
-import { motion } from "framer-motion"
-import { MapPin, Calendar, Plus, Bookmark, Loader2 } from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
+import { MapPin, Calendar, Plus, Bookmark, Loader2, Trash2, AlertTriangle } from "lucide-react"
 import { Button } from "../components/ui/button"
 import { Badge } from "../components/ui/badge"
 import { cn } from "@/lib/utils"
 import { useState, useEffect } from "react"
-import { getTrips, getSavedTrips, supabase } from "../lib/supabase"
+import { getTrips, getSavedTrips, deleteTrip, supabase } from "../lib/supabase"
 import type { Trip, SavedTrip } from "../lib/supabase"
 
 type Page = "landing" | "login" | "register" | "home" | "editor" | "ai" | "splitbill" | "explore" | "profile" | "achievements" | "bucketlist" | "settings" | "notifications" | "trips"
@@ -19,6 +19,8 @@ export function BucketList({ navigateTo }: BucketListProps) {
   const [myTrips, setMyTrips] = useState<Trip[]>([])
   const [savedTrips, setSavedTrips] = useState<SavedTrip[]>([])
   const [loading, setLoading] = useState(true)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!supabase) { setLoading(false); return }
@@ -31,6 +33,33 @@ export function BucketList({ navigateTo }: BucketListProps) {
       setLoading(false)
     })
   }, [])
+
+  const handleDelete = async (tripId: string) => {
+    setDeletingId(tripId)
+    try {
+      await deleteTrip(tripId)
+      setMyTrips(prev => prev.filter(t => t.id !== tripId))
+    } catch (err) {
+      console.error("Delete error:", err)
+    } finally {
+      setDeletingId(null)
+      setConfirmDeleteId(null)
+    }
+  }
+
+  const handleUnsave = async (tripId: string) => {
+    if (!supabase) return
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      await supabase.from('saved_trips').delete()
+        .eq('user_id', user.id)
+        .eq('id', tripId)
+      setSavedTrips(prev => prev.filter(t => t.id !== tripId))
+    } catch (err) {
+      console.error("Unsave error:", err)
+    }
+  }
 
   const formatDate = (d: string | null | undefined) => {
     if (!d) return "Belum diatur"
@@ -84,18 +113,47 @@ export function BucketList({ navigateTo }: BucketListProps) {
               <motion.div key={trip.id}
                 initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
-                className="glass-card-hover p-4 space-y-3 cursor-pointer"
-                onClick={() => navigateTo("editor")}>
-                <div className="flex items-start justify-between">
+                className="glass-card-hover p-4 space-y-3 relative overflow-hidden">
+                {/* Confirm delete overlay */}
+                <AnimatePresence>
+                  {confirmDeleteId === trip.id && (
+                    <motion.div
+                      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                      className="absolute inset-0 z-10 bg-black/70 flex flex-col items-center justify-center gap-2 rounded-2xl p-4"
+                      onClick={(e) => e.stopPropagation()}>
+                      <AlertTriangle className="w-6 h-6 text-red-400" />
+                      <p className="text-white text-sm font-semibold text-center">Hapus "{trip.name}"?</p>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" className="border-white/30 text-white hover:bg-white/10"
+                          onClick={() => setConfirmDeleteId(null)}>Batal</Button>
+                        <Button size="sm" variant="destructive"
+                          onClick={() => handleDelete(trip.id)}
+                          disabled={deletingId === trip.id}>
+                          {deletingId === trip.id ? "..." : "Hapus"}
+                        </Button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <div className="flex items-start justify-between cursor-pointer" onClick={() => navigateTo("editor")}>
                   <div>
                     <h3 className="font-bold">{trip.name}</h3>
                     <p className="text-sm text-muted-foreground flex items-center gap-1">
                       <MapPin className="w-3 h-3" />{trip.destination}
                     </p>
                   </div>
-                  <Badge variant={trip.status === 'completed' ? 'default' : 'secondary'}>
-                    {trip.status}
-                  </Badge>
+                  <div className="flex items-center gap-1.5">
+                    <Badge variant={trip.status === 'completed' ? 'default' : 'secondary'}>
+                      {trip.status}
+                    </Badge>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(trip.id) }}
+                      className="w-7 h-7 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 flex items-center justify-center transition-colors"
+                      title="Hapus trip">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
                 {(trip.start_date || trip.end_date) && (
                   <p className="text-xs text-muted-foreground flex items-center gap-1">
@@ -120,11 +178,19 @@ export function BucketList({ navigateTo }: BucketListProps) {
                 initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
                 className="glass-card-hover p-4 space-y-3">
-                <div>
-                  <h3 className="font-bold">{trip.name}</h3>
-                  <p className="text-sm text-muted-foreground flex items-center gap-1">
-                    <MapPin className="w-3 h-3" />{trip.destination}
-                  </p>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="font-bold">{trip.name}</h3>
+                    <p className="text-sm text-muted-foreground flex items-center gap-1">
+                      <MapPin className="w-3 h-3" />{trip.destination}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleUnsave(trip.id)}
+                    className="w-7 h-7 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 flex items-center justify-center transition-colors shrink-0"
+                    title="Hapus dari simpanan">
+                    <Bookmark className="w-3.5 h-3.5 fill-red-400" />
+                  </button>
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {trip.days} hari · Disimpan {formatDate(trip.created_at)}

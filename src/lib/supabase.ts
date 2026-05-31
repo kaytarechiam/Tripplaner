@@ -166,6 +166,18 @@ export async function createTrip(trip: Omit<Trip, 'id' | 'user_id' | 'created_at
   return data as Trip
 }
 
+export async function deleteTrip(tripId: string) {
+  if (!supabase) throw new Error('Supabase not configured')
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+  const { error } = await supabase
+    .from('trips')
+    .delete()
+    .eq('id', tripId)
+    .eq('owner_id', user.id)   // only owner can delete
+  if (error) throw error
+}
+
 // Get itinerary items for a trip
 export async function getItinerary(tripId: string) {
   if (!supabase) throw new Error('Supabase not configured')

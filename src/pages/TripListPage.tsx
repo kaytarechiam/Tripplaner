@@ -1,17 +1,16 @@
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import {
   ArrowLeft, Calendar, MapPin, Search,
-  Filter, Plus, Clock, Map, ChevronRight,
-  Plane, Mountain, Utensils, Star
+  Plus, Clock,
+  Plane, Trash2, AlertTriangle
 } from "lucide-react"
 import { Button } from "../components/ui/button"
 import { Badge } from "../components/ui/badge"
 import { Input } from "../components/ui/input"
-import { Label } from "../components/ui/label"
 import { Progress } from "../components/ui/progress"
 import { cn } from "@/lib/utils"
 import { useState, useEffect } from "react"
-import { getTrips } from "../lib/supabase"
+import { getTrips, deleteTrip } from "../lib/supabase"
 import type { Trip } from "../lib/supabase"
 import { supabase } from "../lib/supabase"
 
@@ -126,6 +125,8 @@ export function TripListPage({ navigateTo, user }: TripListPageProps) {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [filterTab, setFilterTab] = useState<FilterTab>("semua")
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -141,6 +142,19 @@ export function TripListPage({ navigateTo, user }: TripListPageProps) {
     }
     load()
   }, [])
+
+  const handleDelete = async (tripId: string) => {
+    setDeletingId(tripId)
+    try {
+      await deleteTrip(tripId)
+      setTrips(prev => prev.filter(t => t.id !== tripId))
+    } catch (err) {
+      console.error("Delete trip error:", err)
+    } finally {
+      setDeletingId(null)
+      setConfirmDeleteId(null)
+    }
+  }
 
   // Sort by date: upcoming first, then past last
   const sortedTrips = [...trips].sort((a, b) => {
@@ -283,33 +297,66 @@ export function TripListPage({ navigateTo, user }: TripListPageProps) {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.05 }}
-                  onClick={() => navigateTo("editor")}
-                  className="bg-white border border-border rounded-2xl overflow-hidden cursor-pointer hover:border-[var(--aurora-start)]/30 hover:shadow-md transition-all duration-300 group"
+                  className="bg-white border border-border rounded-2xl overflow-hidden cursor-pointer hover:border-[var(--aurora-start)]/30 hover:shadow-md transition-all duration-300 group relative"
                 >
+                  {/* Confirm Delete Overlay */}
+                  <AnimatePresence>
+                    {confirmDeleteId === trip.id && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute inset-0 z-20 bg-black/70 flex flex-col items-center justify-center gap-3 rounded-2xl p-4"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <AlertTriangle className="w-8 h-8 text-red-400" />
+                        <p className="text-white text-sm font-semibold text-center">Hapus trip "{trip.name}"?</p>
+                        <p className="text-white/70 text-xs text-center">Tindakan ini tidak bisa dibatalkan.</p>
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" className="border-white/30 text-white hover:bg-white/10"
+                            onClick={() => setConfirmDeleteId(null)}>Batal</Button>
+                          <Button size="sm" variant="destructive"
+                            onClick={() => handleDelete(trip.id)}
+                            disabled={deletingId === trip.id}>
+                            {deletingId === trip.id ? "Menghapus..." : "Hapus"}
+                          </Button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
                   {/* Cover */}
-                  <div className="aspect-video bg-gradient-to-br relative overflow-hidden">
+                  <div
+                    className="aspect-video relative overflow-hidden"
+                    onClick={() => navigateTo("editor")}
+                  >
+                    {/* Always-visible gradient background */}
+                    <div className={cn("absolute inset-0 bg-gradient-to-br", gradient)} />
+                    {/* Image overlays gradient */}
                     {(() => {
                       const imgUrl = getDestinationImage(trip.destination)
                       return imgUrl ? (
                         <img
                           src={imgUrl}
                           alt={trip.destination}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            // Fallback to gradient on error
-                            e.currentTarget.style.display = "none"
-                            e.currentTarget.nextElementSibling?.classList.remove("hidden")
-                          }}
+                          className="absolute inset-0 w-full h-full object-cover"
+                          onError={(e) => { e.currentTarget.style.display = "none" }}
                         />
                       ) : null
                     })()}
-                    {/* Fallback gradient (hidden if image loads) */}
-                    <div className={cn("absolute inset-0 bg-gradient-to-br", gradient, "hidden")} />
                     <div className="absolute inset-0 bg-black/10" />
-                    <div className="absolute top-3 right-3">
+                    <div className="absolute top-3 right-3 flex items-center gap-1.5">
                       <span className={cn("px-2 py-1 rounded-lg text-xs font-medium glass-card", statusInfo.color)}>
                         {statusInfo.label}
                       </span>
+                      {/* Delete button — visible on hover */}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(trip.id) }}
+                        className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg bg-red-500/80 hover:bg-red-600 flex items-center justify-center transition-all"
+                        title="Hapus trip"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-white" />
+                      </button>
                     </div>
                     <div className="absolute bottom-3 left-3 flex gap-2">
                       <span className="glass-card px-2 py-1 text-xs text-white flex items-center gap-1">
@@ -328,7 +375,7 @@ export function TripListPage({ navigateTo, user }: TripListPageProps) {
                   </div>
 
                   {/* Info */}
-                  <div className="p-4">
+                  <div className="p-4" onClick={() => navigateTo("editor")}>
                     <h3 className="font-bold group-hover:text-[var(--aurora-start)] transition-colors">{trip.name}</h3>
                     <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
                       {trip.start_date && (
