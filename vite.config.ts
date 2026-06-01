@@ -10,6 +10,13 @@ export default defineConfig({
     },
   },
   server: {
+    allowedHosts: [
+      'localhost',
+      '127.0.0.1',
+      'tripplaner.stei.cloud',
+      '.stei.cloud',
+      '.trycloudflare.com',
+    ],
     proxy: {
       '/api': {
         target: 'http://localhost:3001',
