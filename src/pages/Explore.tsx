@@ -5,12 +5,12 @@ import {
   Loader2, Plane
 } from "lucide-react"
 import { Button } from "../components/ui/button"
-import { Badge } from "../components/ui/badge"
 import { Avatar, AvatarFallback } from "../components/ui/avatar"
 import { Input } from "../components/ui/input"
 import { cn } from "@/lib/utils"
 import { useState, useEffect } from "react"
 import { supabase, saveTrip } from "../lib/supabase"
+import { searchImages } from "../lib/api"
 import { TripDetailModal } from "../components/TripDetailModal"
 
 // Pre-seeded destination images from Unsplash (reliable, no API key needed)
@@ -122,7 +122,7 @@ export function Explore({ navigateTo }: ExploreProps) {
         .limit(30),
       supabase.from('trip_likes').select('trip_id'),
       supabase.from('trip_comments').select('trip_id'),
-    ]).then(([{ data, error }, { data: likesData }, { data: commentsData }]) => {
+    ]).then(async ([{ data, error }, { data: likesData }, { data: commentsData }]) => {
       if (error || !data || data.length === 0) {
         setTrips([])
       } else {
@@ -132,7 +132,7 @@ export function Explore({ navigateTo }: ExploreProps) {
         ;(likesData || []).forEach((r: any) => { likeMap[r.trip_id] = (likeMap[r.trip_id] || 0) + 1 })
         ;(commentsData || []).forEach((r: any) => { commentMap[r.trip_id] = (commentMap[r.trip_id] || 0) + 1 })
 
-        setTrips(data.map((t: any, i: number) => {
+        const mapped = data.map((t: any, i: number) => {
           const tripName = t.title || t.name || 'Trip'
           const profile = Array.isArray(t.profiles) ? t.profiles[0] : t.profiles
           const authorName = profile?.name || 'traveler'
@@ -159,7 +159,29 @@ export function Explore({ navigateTo }: ExploreProps) {
             authorAvatar,
             image: getDestinationImage(t.destination || '') || undefined,
           } as PublicTrip
-        }))
+        })
+        setTrips(mapped)
+
+        // Background enhancement: fetch real images via Google Image Search API for
+        // destinations without a static image (silently skips if key not configured)
+        const uniqueDests = [...new Set(
+          mapped.filter(t => !t.image).map(t => t.destination)
+        )].slice(0, 5)
+        if (uniqueDests.length > 0) {
+          const imageMap: Record<string, string> = {}
+          await Promise.allSettled(
+            uniqueDests.map(async (dest) => {
+              const imgs = await searchImages(`${dest} tourism`)
+              if (imgs.length > 0 && imgs[0].url) imageMap[dest] = imgs[0].url
+            })
+          )
+          if (Object.keys(imageMap).length > 0) {
+            setTrips(prev => prev.map(t => ({
+              ...t,
+              image: t.image || imageMap[t.destination] || undefined,
+            })))
+          }
+        }
       }
       setLoading(false)
     })
