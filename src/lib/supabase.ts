@@ -61,7 +61,8 @@ export async function signUp(email: string, password: string, name: string) {
 
 export type Trip = {
   id: string
-  user_id: string
+  user_id: string   // alias for owner_id (kept for backward compat)
+  owner_id?: string // actual DB column
   name: string
   destination: string
   start_date?: string
@@ -71,6 +72,7 @@ export type Trip = {
   is_public?: boolean
   created_at: string
   updated_at: string
+  member_role?: 'owner' | 'editor' | 'viewer' // populated by getTrips for shared trips
 }
 
 export type ItineraryItem = {
@@ -113,20 +115,52 @@ export type SplitBillItem = {
   created_at: string
 }
 
-// Get all trips for current user
+// Get all trips for current user (owned + accepted member trips)
 export async function getTrips() {
   if (!supabase) throw new Error('Supabase not configured')
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
 
-  const { data, error } = await supabase
+  // 1. Get trips owned by user
+  const { data: ownedTrips, error: ownedErr } = await supabase
     .from('trips')
     .select('*')
     .eq('owner_id', user.id)
     .order('created_at', { ascending: false })
 
-  if (error) throw error
-  return data as Trip[]
+  if (ownedErr) throw ownedErr
+
+  // 2. Get trip_members rows where user is accepted (non-owner)
+  const { data: memberRows } = await supabase
+    .from('trip_members')
+    .select('trip_id, role')
+    .eq('user_id', user.id)
+    .eq('status', 'accepted')
+    .neq('role', 'owner')
+
+  let memberTrips: Trip[] = []
+  if (memberRows && memberRows.length > 0) {
+    const memberTripIds = memberRows.map((r: any) => r.trip_id)
+    const { data: sharedTrips } = await supabase
+      .from('trips')
+      .select('*')
+      .in('id', memberTripIds)
+      .order('created_at', { ascending: false })
+
+    if (sharedTrips) {
+      memberTrips = sharedTrips.map((t: any) => {
+        const memberRow = memberRows.find((r: any) => r.trip_id === t.id)
+        return { ...t, member_role: memberRow?.role || 'viewer' } as Trip
+      })
+    }
+  }
+
+  // 3. Merge (owned first, then shared). Mark owned trips role=owner.
+  const ownedWithRole = (ownedTrips || []).map((t: any) => ({ ...t, member_role: 'owner' as const }))
+  const ownedIds = new Set(ownedWithRole.map((t: any) => t.id))
+  const uniqueShared = memberTrips.filter(t => !ownedIds.has(t.id))
+
+  return [...ownedWithRole, ...uniqueShared] as Trip[]
 }
 
 // Create a new trip

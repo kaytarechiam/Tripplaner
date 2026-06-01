@@ -346,17 +346,25 @@ export function TripListPage({ navigateTo, user }: TripListPageProps) {
                     })()}
                     <div className="absolute inset-0 bg-black/10" />
                     <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                      {/* Show "Member" badge for shared trips */}
+                      {(trip as any).member_role && (trip as any).member_role !== 'owner' && (
+                        <span className="px-2 py-1 rounded-lg text-xs font-medium glass-card bg-violet-500/20 text-violet-300">
+                          Member
+                        </span>
+                      )}
                       <span className={cn("px-2 py-1 rounded-lg text-xs font-medium glass-card", statusInfo.color)}>
                         {statusInfo.label}
                       </span>
-                      {/* Delete button — visible on hover */}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(trip.id) }}
-                        className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg bg-red-500/80 hover:bg-red-600 flex items-center justify-center transition-all"
-                        title="Hapus trip"
-                      >
-                        <Trash2 className="w-3.5 h-3.5 text-white" />
-                      </button>
+                      {/* Delete button — only for owner, visible on hover */}
+                      {(trip as any).member_role === 'owner' && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(trip.id) }}
+                          className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg bg-red-500/80 hover:bg-red-600 flex items-center justify-center transition-all"
+                          title="Hapus trip"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-white" />
+                        </button>
+                      )}
                     </div>
                     <div className="absolute bottom-3 left-3 flex gap-2">
                       <span className="glass-card px-2 py-1 text-xs text-white flex items-center gap-1">

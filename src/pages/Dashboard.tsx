@@ -252,7 +252,11 @@ export function Dashboard({ navigateTo, onLogout, user }: DashboardProps) {
                             </div>
                           </div>
                         </div>
-                        <button className="p-1 rounded hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          className="p-1 rounded hover:bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={(e) => { e.stopPropagation(); navigateTo("trips") }}
+                          title="Lihat semua trip"
+                        >
                           <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
                         </button>
                       </div>

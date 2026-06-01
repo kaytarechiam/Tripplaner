@@ -3,7 +3,7 @@ import {
   MapPin, Calendar, Users, Star, Award,
   Edit3, Globe, Plane, Map, TrendingUp,
   ChevronRight, ExternalLink, Heart, MessageSquare, Share2,
-  Loader2, UserPlus, UserMinus, Check
+  Loader2, UserPlus, Check
 } from "lucide-react"
 import { Button } from "../components/ui/button"
 import { Badge } from "../components/ui/badge"
@@ -12,9 +12,9 @@ import { Progress } from "../components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs"
 import { cn } from "@/lib/utils"
 import { useState, useEffect } from "react"
-import { getTrips } from "../lib/supabase"
+import { getTrips, getSavedTrips } from "../lib/supabase"
 import { supabase } from "../lib/supabase"
-import type { Trip } from "../lib/supabase"
+import type { Trip, SavedTrip } from "../lib/supabase"
 
 type Page = "landing" | "login" | "register" | "home" | "editor" | "ai" | "splitbill" | "explore" | "profile" | "achievements" | "bucketlist" | "settings" | "notifications"
 
@@ -27,6 +27,7 @@ interface ProfileProps {
 export function Profile({ navigateTo, onLogout, user }: ProfileProps) {
   const [isOwnProfile] = useState(true)
   const [trips, setTrips] = useState<Trip[]>([])
+  const [savedTrips, setSavedTrips] = useState<SavedTrip[]>([])
   const [loading, setLoading] = useState(true)
   const [followersCount, setFollowersCount] = useState(0)
   const [followingCount, setFollowingCount] = useState(0)
@@ -34,10 +35,13 @@ export function Profile({ navigateTo, onLogout, user }: ProfileProps) {
   const [followLoading, setFollowLoading] = useState(false)
 
   useEffect(() => {
-    getTrips()
-      .then(data => setTrips(data))
-      .catch(() => setTrips([]))
-      .finally(() => setLoading(false))
+    Promise.all([
+      getTrips().catch(() => [] as Trip[]),
+      getSavedTrips().catch(() => [] as SavedTrip[]),
+    ]).then(([tripsData, savedData]) => {
+      setTrips(tripsData)
+      setSavedTrips(savedData)
+    }).finally(() => setLoading(false))
   }, [])
 
   useEffect(() => {
@@ -125,7 +129,11 @@ export function Profile({ navigateTo, onLogout, user }: ProfileProps) {
                 </AvatarFallback>
               </Avatar>
               {isOwnProfile && (
-                <button className="absolute bottom-0 right-0 w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-lg">
+                <button
+                  className="absolute bottom-0 right-0 w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-lg hover:bg-gray-50 transition-colors"
+                  onClick={() => navigateTo("settings")}
+                  title="Ganti foto profil"
+                >
                   <Edit3 className="w-4 h-4 text-[var(--aurora-start)]" />
                 </button>
               )}
@@ -301,13 +309,51 @@ export function Profile({ navigateTo, onLogout, user }: ProfileProps) {
 
           {/* Saved Tab */}
           <TabsContent value="saved" className="space-y-4">
-            <div className="text-center py-12">
-              <Heart className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">Trip yang kamu simpan akan muncul di sini</p>
-              <Button variant="gradient" size="sm" className="mt-4" onClick={() => navigateTo("explore")}>
-                Jelajahi Trip
-              </Button>
-            </div>
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="w-6 h-6 border-2 border-[var(--aurora-start)] border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : savedTrips.length === 0 ? (
+              <div className="text-center py-12">
+                <Heart className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">Trip yang kamu simpan akan muncul di sini</p>
+                <Button variant="gradient" size="sm" className="mt-4" onClick={() => navigateTo("explore")}>
+                  Jelajahi Trip
+                </Button>
+              </div>
+            ) : (
+              <div className="grid md:grid-cols-2 gap-4">
+                {savedTrips.map((trip, i) => (
+                  <motion.div
+                    key={trip.id}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: i * 0.05 }}
+                    className="glass-card-hover p-4 space-y-2"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="min-w-0 flex-1">
+                        <h4 className="font-bold truncate">{trip.name}</h4>
+                        <p className="text-sm text-muted-foreground flex items-center gap-1 mt-0.5">
+                          <MapPin className="w-3 h-3 shrink-0" />{trip.destination}
+                        </p>
+                      </div>
+                      <Badge variant="secondary" className="ml-2 shrink-0">{trip.days} hari</Badge>
+                    </div>
+                    {trip.tags && trip.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {trip.tags.slice(0, 3).map((tag) => (
+                          <span key={tag} className="text-xs px-2 py-0.5 rounded-full bg-[var(--aurora-start)]/10 text-[var(--aurora-start)]">{tag}</span>
+                        ))}
+                      </div>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Disimpan {new Date(trip.created_at).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
+                    </p>
+                  </motion.div>
+                ))}
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </div>

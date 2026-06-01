@@ -144,15 +144,23 @@ export function BucketList({ navigateTo }: BucketListProps) {
                     </p>
                   </div>
                   <div className="flex items-center gap-1.5">
+                    {(trip as any).member_role && (trip as any).member_role !== 'owner' && (
+                      <Badge variant="secondary" className="bg-violet-100 text-violet-700 text-xs">
+                        Member
+                      </Badge>
+                    )}
                     <Badge variant={trip.status === 'completed' ? 'default' : 'secondary'}>
                       {trip.status}
                     </Badge>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(trip.id) }}
-                      className="w-7 h-7 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 flex items-center justify-center transition-colors"
-                      title="Hapus trip">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {/* Delete only for trip owner */}
+                    {((trip as any).member_role === 'owner' || !(trip as any).member_role) && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(trip.id) }}
+                        className="w-7 h-7 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 flex items-center justify-center transition-colors"
+                        title="Hapus trip">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
                 {(trip.start_date || trip.end_date) && (

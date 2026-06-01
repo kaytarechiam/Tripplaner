@@ -586,6 +586,192 @@ function CreateTripModal({ onCreated }: { onCreated: (trip: Trip) => void }) {
   )
 }
 
+// ─── Edit Trip Modal ──────────────────────────────────────
+function EditTripModal({ trip, onClose, onSaved }: {
+  trip: Trip; onClose: () => void; onSaved: (t: Trip) => void
+}) {
+  const [form, setForm] = useState({
+    name: trip.name || "",
+    destination: trip.destination || "",
+    start_date: trip.start_date || "",
+    end_date: trip.end_date || "",
+    status: trip.status || "planning" as "planning" | "active" | "completed",
+  })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!form.name.trim()) return
+    setLoading(true); setError("")
+    try {
+      const updated = await updateTrip(trip.id, {
+        name: form.name.trim(),
+        destination: form.destination.trim(),
+        start_date: form.start_date || undefined,
+        end_date: form.end_date || undefined,
+        status: form.status,
+      })
+      onSaved(updated); onClose()
+    } catch (err: any) {
+      setError(err.message || "Gagal menyimpan perubahan")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+        className="bg-background rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4"
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-lg flex items-center gap-2">
+            <Settings className="w-5 h-5 text-muted-foreground" />Edit Trip
+          </h3>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-white/10"><X className="w-4 h-4" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && <p className="text-xs text-red-500 bg-red-50 p-2 rounded-lg">{error}</p>}
+          <div className="space-y-1">
+            <Label>Nama Trip *</Label>
+            <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Nama trip" required />
+          </div>
+          <div className="space-y-1">
+            <Label>Destinasi</Label>
+            <Input value={form.destination} onChange={e => setForm(f => ({ ...f, destination: e.target.value }))} placeholder="Kota atau negara" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>Tanggal Mulai</Label>
+              <Input type="date" value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} />
+            </div>
+            <div className="space-y-1">
+              <Label>Tanggal Selesai</Label>
+              <Input type="date" value={form.end_date} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))} />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label>Status</Label>
+            <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as any }))}
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm">
+              <option value="planning">📋 Planning</option>
+              <option value="active">✈️ Aktif</option>
+              <option value="completed">✅ Selesai</option>
+            </select>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <Button type="button" variant="outline" className="flex-1" onClick={onClose}>Batal</Button>
+            <Button type="submit" variant="gradient" className="flex-1" disabled={loading}>
+              {loading ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Check className="w-4 h-4 mr-1" />}
+              Simpan
+            </Button>
+          </div>
+        </form>
+      </motion.div>
+    </div>
+  )
+}
+
+// ─── Trip Preview Modal ────────────────────────────────────
+function TripPreviewModal({ trip, dayGroups, weather, onClose }: {
+  trip: Trip; dayGroups: DayGroup[]; weather: any[]; onClose: () => void
+}) {
+  const totalItems = dayGroups.reduce((sum, dg) => sum + dg.items.length, 0)
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+        className="bg-background rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col"
+      >
+        {/* Header */}
+        <div className="p-5 border-b flex items-start justify-between shrink-0">
+          <div>
+            <h3 className="font-bold text-xl">{trip.name}</h3>
+            <div className="flex flex-wrap items-center gap-3 mt-1 text-sm text-muted-foreground">
+              <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{trip.destination}</span>
+              {trip.start_date && (
+                <span className="flex items-center gap-1">
+                  <Calendar className="w-3 h-3" />
+                  {new Date(trip.start_date + "T00:00:00").toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" })}
+                </span>
+              )}
+              <span className="flex items-center gap-1"><Navigation className="w-3 h-3" />{totalItems} tempat · {dayGroups.length} hari</span>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-white/10 shrink-0 ml-4"><X className="w-4 h-4" /></button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-6">
+          {dayGroups.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <MapIcon className="w-12 h-12 mx-auto mb-3 opacity-20" />
+              <p>Belum ada itinerary untuk dipreview</p>
+              <p className="text-sm mt-1">Tambah destinasi atau generate dengan AI</p>
+            </div>
+          ) : dayGroups.map((dg, di) => {
+            const w = weather[di]
+            return (
+              <div key={dg.day}>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[var(--aurora-start)] to-[var(--aurora-end)] flex items-center justify-center text-white font-bold text-sm shadow-lg shrink-0">
+                    {dg.day}
+                  </div>
+                  <div className="flex-1">
+                    <span className="font-bold">Hari {dg.day}</span>
+                    {trip.start_date && (
+                      <span className="ml-2 text-sm text-muted-foreground">
+                        {new Date(new Date(trip.start_date + "T00:00:00").getTime() + (dg.day - 1) * 86400000)
+                          .toLocaleDateString("id-ID", { weekday: "short", day: "2-digit", month: "short" })}
+                      </span>
+                    )}
+                  </div>
+                  {w && <span className="text-sm text-muted-foreground">{getWeatherIcon(w.weather_code)} {w.temp_max}°/{w.temp_min}°</span>}
+                </div>
+                <div className="space-y-2 ml-12">
+                  {dg.items.map(item => {
+                    const type = destinationTypes[item.category] || destinationTypes.landmark
+                    const Icon = type.icon
+                    return (
+                      <div key={item.id} className="flex items-start gap-3 p-3 rounded-xl bg-secondary/30">
+                        <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${type.color} flex items-center justify-center shrink-0`}>
+                          <Icon className="w-4 h-4 text-white" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center flex-wrap gap-2">
+                            <span className="font-medium">{item.title}</span>
+                            <span className="text-xs text-muted-foreground bg-secondary/60 rounded-full px-2 py-0.5">{item.time}</span>
+                            {item.duration_minutes && (
+                              <span className="text-xs text-muted-foreground">
+                                {item.duration_minutes < 60 ? `${item.duration_minutes} mnt` : `${Math.floor(item.duration_minutes / 60)}j${item.duration_minutes % 60 > 0 ? ` ${item.duration_minutes % 60}m` : ""}`}
+                              </span>
+                            )}
+                          </div>
+                          {item.location && <p className="text-xs text-muted-foreground mt-0.5">{item.location.split(",").slice(0, 2).join(",").trim()}</p>}
+                          {item.notes && <p className="text-xs text-muted-foreground italic mt-0.5">{item.notes}</p>}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 border-t shrink-0 flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">{totalItems} destinasi · {dayGroups.length} hari</p>
+          <Button variant="outline" size="sm" onClick={onClose}>Tutup</Button>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
 // ─── Day group ────────────────────────────────────────────
 interface DayGroup {
   day: number
@@ -649,6 +835,9 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
   const [inviteError, setInviteError] = useState("")
   const [inviteSuccess, setInviteSuccess] = useState("")
   const [togglingPublic, setTogglingPublic] = useState(false)
+  const [showEditTripModal, setShowEditTripModal] = useState(false)
+  const [showPreviewModal, setShowPreviewModal] = useState(false)
+  const [copiedLink, setCopiedLink] = useState(false)
 
   const refreshItems = useCallback(() => {
     if (!selectedTrip) return
@@ -811,6 +1000,39 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
       setTogglingPublic(false)
     }
   }
+
+  const handleEditTripSaved = useCallback((updated: Trip) => {
+    setSelectedTrip(updated)
+    setTrips(prev => prev.map(t => t.id === updated.id ? updated : t))
+  }, [])
+
+  const handleCopyTripSummary = useCallback(async () => {
+    if (!selectedTrip) return
+    const lines: string[] = [
+      `✈️ ${selectedTrip.name}`,
+      `📍 ${selectedTrip.destination}`,
+      selectedTrip.start_date
+        ? `📅 ${new Date(selectedTrip.start_date + "T00:00:00").toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" })}`
+        : "",
+      "",
+    ]
+    const dgs = groupItemsByDay(itineraryItems)
+    for (const dg of dgs) {
+      lines.push(`--- Hari ${dg.day} ---`)
+      for (const item of dg.items) {
+        lines.push(`• ${item.time}  ${item.title}${item.location ? ` — ${item.location.split(",")[0].trim()}` : ""}`)
+      }
+      lines.push("")
+    }
+    try {
+      await navigator.clipboard.writeText(lines.filter(l => l !== undefined).join("\n"))
+      setCopiedLink(true)
+      setTimeout(() => setCopiedLink(false), 2500)
+    } catch {
+      // fallback: alert
+      alert(lines.join("\n"))
+    }
+  }, [selectedTrip, itineraryItems])
 
   const dayGroups = groupItemsByDay(itineraryItems)
   const currentDay = dayGroups[selectedDay]
@@ -1184,9 +1406,29 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
             </Button>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="glass" size="icon"><Settings className="w-4 h-4" /></Button>
-            <Button variant="glass" size="icon"><ExternalLink className="w-4 h-4" /></Button>
-            <Button variant="gradient" size="sm"><Eye className="w-4 h-4 mr-1" />Preview Trip</Button>
+            <Button
+              variant="glass" size="icon"
+              onClick={() => selectedTrip && setShowEditTripModal(true)}
+              title="Edit pengaturan trip"
+              disabled={!selectedTrip}
+            >
+              <Settings className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="glass" size="icon"
+              onClick={handleCopyTripSummary}
+              title={copiedLink ? "Disalin!" : "Salin ringkasan trip"}
+              disabled={!selectedTrip}
+            >
+              {copiedLink ? <Check className="w-4 h-4 text-emerald-400" /> : <ExternalLink className="w-4 h-4" />}
+            </Button>
+            <Button
+              variant="gradient" size="sm"
+              onClick={() => setShowPreviewModal(true)}
+              disabled={!selectedTrip}
+            >
+              <Eye className="w-4 h-4 mr-1" />Preview Trip
+            </Button>
           </div>
         </div>
 
@@ -1270,6 +1512,29 @@ export function TripEditorPage({ navigateTo, sidebarCollapsed = false, onToggleS
             onAdded={refreshItems}
             prefill={addPrefill}
             editItem={editItem}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Edit Trip Modal */}
+      <AnimatePresence>
+        {showEditTripModal && selectedTrip && (
+          <EditTripModal
+            trip={selectedTrip}
+            onClose={() => setShowEditTripModal(false)}
+            onSaved={handleEditTripSaved}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Trip Preview Modal */}
+      <AnimatePresence>
+        {showPreviewModal && selectedTrip && (
+          <TripPreviewModal
+            trip={selectedTrip}
+            dayGroups={dayGroups}
+            weather={weather}
+            onClose={() => setShowPreviewModal(false)}
           />
         )}
       </AnimatePresence>
