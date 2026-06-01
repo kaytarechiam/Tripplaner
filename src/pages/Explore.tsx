@@ -1,49 +1,43 @@
-import { motion, AnimatePresence } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion";
 import {
-  Globe, Search, TrendingUp, Heart, MessageSquare, Share2,
-  MapPin, Calendar, Star,
-  Loader2, Plane
-} from "lucide-react"
-import { Button } from "../components/ui/button"
-import { Avatar, AvatarFallback } from "../components/ui/avatar"
-import { Input } from "../components/ui/input"
-import { cn } from "@/lib/utils"
-import { useState, useEffect } from "react"
-import { supabase, saveTrip } from "../lib/supabase"
-import { searchImages } from "../lib/api"
-import { TripDetailModal } from "../components/TripDetailModal"
+  Globe,
+  Search,
+  TrendingUp,
+  Heart,
+  MessageSquare,
+  Share2,
+  MapPin,
+  Calendar,
+  Star,
+  Loader2,
+  Plane,
+} from "lucide-react";
+import { Button } from "../components/ui/button";
+import { Avatar, AvatarFallback } from "../components/ui/avatar";
+import { Input } from "../components/ui/input";
+import { cn } from "@/lib/utils";
+import { useState, useEffect, useMemo } from "react";
+import { supabase, saveTrip } from "../lib/supabase";
+import { TripDetailModal } from "../components/TripDetailModal";
+import { useDestinationImages } from "../lib/useDestinationImages";
 
-// Pre-seeded destination images from Unsplash (reliable, no API key needed)
-const DESTINATION_IMAGES: Record<string, string> = {
-  bali: "https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=800&q=80",
-  lombok: "https://images.unsplash.com/photo-1555400038-63f5ba517a47?w=800&q=80",
-  jakarta: "https://images.unsplash.com/photo-1558636508-e0db3813bd1d?w=800&q=80",
-  bandung: "https://images.unsplash.com/photo-1617871196891-2b6e44e6b6a6?w=800&q=80",
-  jogja: "https://images.unsplash.com/photo-1568402102990-bc541580a0d5?w=800&q=80",
-  yogyakarta: "https://images.unsplash.com/photo-1568402102990-bc541580a0d5?w=800&q=80",
-  surabaya: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&q=80",
-  semarang: "https://images.unsplash.com/photo-1558618047-3c8c76ca7d13?w=800&q=80",
-  malang: "https://images.unsplash.com/photo-1570459027562-4a916cc6111f?w=800&q=80",
-  Raja_Ampat: "https://images.unsplash.com/photo-1540541338287-41700207dee6?w=800&q=80",
-  komodo: "https://images.unsplash.com/photo-1519046904884-53103b34b206?w=800&q=80",
-  labuan_bajo: "https://images.unsplash.com/photo-1519046904884-53103b34b206?w=800&q=80",
-  flores: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&q=80",
-  nusa_penida: "https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=800&q=80",
-  ubud: "https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=800&q=80",
-  kuta: "https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=800&q=80",
-  seminyak: "https://images.unsplash.com/photo-1570459027562-4a916cc6111f?w=800&q=80",
-  default: "https://images.unsplash.com/photo-1488085061387-422e29b40080?w=800&q=80",
-}
-
-function getDestinationImage(destination: string): string | null {
-  const key = destination.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "")
-  return DESTINATION_IMAGES[key] || DESTINATION_IMAGES[Object.keys(DESTINATION_IMAGES).find(k => key.includes(k)) || ""] || null
-}
-
-type Page = "landing" | "login" | "register" | "home" | "editor" | "ai" | "splitbill" | "explore" | "profile" | "achievements" | "bucketlist" | "settings" | "notifications"
+type Page =
+  | "landing"
+  | "login"
+  | "register"
+  | "home"
+  | "editor"
+  | "ai"
+  | "splitbill"
+  | "explore"
+  | "profile"
+  | "achievements"
+  | "bucketlist"
+  | "settings"
+  | "notifications";
 
 interface ExploreProps {
-  navigateTo: (page: Page) => void
+  navigateTo: (page: Page) => void;
 }
 
 const categories = [
@@ -53,26 +47,27 @@ const categories = [
   { id: "city", label: "Kota", emoji: "🏙️" },
   { id: "culinary", label: "Kuliner", emoji: "🍜" },
   { id: "culture", label: "Budaya", emoji: "🏛️" },
-]
+];
 
 interface PublicTrip {
-  id: string
-  trip_id: string
-  name: string
-  destination: string
-  start_date: string | null
-  end_date: string | null
-  status: string
-  days: number
-  places: number
-  likes: number
-  comments: number
-  rating: number
-  gradient: string
-  tags: string[]
-  author: string
-  authorAvatar: string
-  image?: string
+  id: string;
+  trip_id: string;
+  name: string;
+  destination: string;
+  start_date: string | null;
+  end_date: string | null;
+  status: string;
+  days: number;
+  places: number;
+  likes: number;
+  comments: number;
+  rating: number;
+  gradient: string;
+  tags: string[];
+  author: string;
+  authorAvatar: string;
+  image?: string;
+  created_at: string;
 }
 
 const GRADIENTS = [
@@ -82,133 +77,164 @@ const GRADIENTS = [
   "from-amber-400 via-orange-500 to-red-600",
   "from-fuchsia-400 via-pink-500 to-rose-600",
   "from-cyan-400 via-blue-500 to-indigo-600",
-]
-
+];
 
 export function Explore({ navigateTo }: ExploreProps) {
-  const [selectedCategory, setSelectedCategory] = useState("all")
-  const [searchQuery, setSearchQuery] = useState("")
-  const [sortBy, setSortBy] = useState<"popular" | "recent" | "rating">("popular")
-  const [trips, setTrips] = useState<PublicTrip[]>([])
-  const [loading, setLoading] = useState(true)
-  const [selectedTrip, setSelectedTrip] = useState<PublicTrip | null>(null)
-  const [saveToast, setSaveToast] = useState<string | null>(null)
-  const [savedTripIds, setSavedTripIds] = useState<Set<string>>(new Set())
-  const [savingId, setSavingId] = useState<string | null>(null)
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState<"popular" | "recent" | "rating">(
+    "popular",
+  );
+  const [trips, setTrips] = useState<PublicTrip[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedTrip, setSelectedTrip] = useState<PublicTrip | null>(null);
+  const [saveToast, setSaveToast] = useState<string | null>(null);
+  const [savedTripIds, setSavedTripIds] = useState<Set<string>>(new Set());
+  const [savingId, setSavingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!supabase) {
-      setTrips([])
-      setLoading(false)
-      return
+      setTrips([]);
+      setLoading(false);
+      return;
     }
     // Load saved trip IDs for the current user (to show heart state)
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
-        supabase!.from('saved_trips').select('original_trip_id').eq('user_id', user.id)
+        supabase!
+          .from("saved_trips")
+          .select("original_trip_id")
+          .eq("user_id", user.id)
           .then(({ data }) => {
-            if (data) setSavedTripIds(new Set(data.map((r: any) => r.original_trip_id).filter(Boolean)))
-          })
+            if (data)
+              setSavedTripIds(
+                new Set(
+                  data.map((r: any) => r.original_trip_id).filter(Boolean),
+                ),
+              );
+          });
       }
-    })
+    });
 
     // Fetch trips + their like/comment counts in parallel
     Promise.all([
       supabase
-        .from('trips')
-        .select(`id, title, name, destination, start_date, end_date, status, cover_gradient, tags, profiles(name, avatar_url)`)
-        .eq('is_public', true)
-        .order('created_at', { ascending: false })
-        .limit(30),
-      supabase.from('trip_likes').select('trip_id'),
-      supabase.from('trip_comments').select('trip_id'),
-    ]).then(async ([{ data, error }, { data: likesData }, { data: commentsData }]) => {
-      if (error || !data || data.length === 0) {
-        setTrips([])
-      } else {
-        // Build count maps
-        const likeMap: Record<string, number> = {}
-        const commentMap: Record<string, number> = {}
-        ;(likesData || []).forEach((r: any) => { likeMap[r.trip_id] = (likeMap[r.trip_id] || 0) + 1 })
-        ;(commentsData || []).forEach((r: any) => { commentMap[r.trip_id] = (commentMap[r.trip_id] || 0) + 1 })
+        .from("trips")
+        .select(
+          `id, title, name, destination, start_date, end_date, status, cover_gradient, tags, created_at, profiles(name, avatar_url)`,
+        )
+        .eq("is_public", true)
+        .order("created_at", { ascending: false })
+        .limit(50),
+      supabase.from("trip_likes").select("trip_id"),
+      supabase.from("trip_comments").select("trip_id"),
+    ]).then(
+      async ([
+        { data, error },
+        { data: likesData },
+        { data: commentsData },
+      ]) => {
+        if (error || !data || data.length === 0) {
+          setTrips([]);
+        } else {
+          // Build count maps
+          const likeMap: Record<string, number> = {};
+          const commentMap: Record<string, number> = {};
+          (likesData || []).forEach((r: any) => {
+            likeMap[r.trip_id] = (likeMap[r.trip_id] || 0) + 1;
+          });
+          (commentsData || []).forEach((r: any) => {
+            commentMap[r.trip_id] = (commentMap[r.trip_id] || 0) + 1;
+          });
 
-        const mapped = data.map((t: any, i: number) => {
-          const tripName = t.title || t.name || 'Trip'
-          const profile = Array.isArray(t.profiles) ? t.profiles[0] : t.profiles
-          const authorName = profile?.name || 'traveler'
-          const authorAvatar = authorName.split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)
-          const rawTags: string[] = Array.isArray(t.tags) && t.tags.length > 0 ? t.tags : ['all']
-          return {
-            id: t.id,
-            trip_id: t.id,
-            name: tripName,
-            destination: t.destination || '',
-            start_date: t.start_date,
-            end_date: t.end_date,
-            status: t.status,
-            days: t.start_date && t.end_date
-              ? Math.max(1, Math.ceil((new Date(t.end_date).getTime() - new Date(t.start_date).getTime()) / 86400000) + 1)
-              : 3,
-            places: 0,
-            likes: likeMap[t.id] || 0,
-            comments: commentMap[t.id] || 0,
-            rating: parseFloat((4.0 + Math.random() * 0.9).toFixed(1)),
-            gradient: t.cover_gradient || GRADIENTS[i % GRADIENTS.length],
-            tags: rawTags,
-            author: authorName,
-            authorAvatar,
-            image: getDestinationImage(t.destination || '') || undefined,
-          } as PublicTrip
-        })
-        setTrips(mapped)
-
-        // Background enhancement: fetch real images via Google Image Search API for
-        // destinations without a static image (silently skips if key not configured)
-        const uniqueDests = [...new Set(
-          mapped.filter(t => !t.image).map(t => t.destination)
-        )].slice(0, 5)
-        if (uniqueDests.length > 0) {
-          const imageMap: Record<string, string> = {}
-          await Promise.allSettled(
-            uniqueDests.map(async (dest) => {
-              const imgs = await searchImages(`${dest} tourism`)
-              if (imgs.length > 0 && imgs[0].url) imageMap[dest] = imgs[0].url
-            })
-          )
-          if (Object.keys(imageMap).length > 0) {
-            setTrips(prev => prev.map(t => ({
-              ...t,
-              image: t.image || imageMap[t.destination] || undefined,
-            })))
-          }
+          const mapped = data.map((t: any, i: number) => {
+            const tripName = t.title || t.name || "Trip";
+            const profile = Array.isArray(t.profiles)
+              ? t.profiles[0]
+              : t.profiles;
+            const authorName = profile?.name || "traveler";
+            const authorAvatar = authorName
+              .split(" ")
+              .map((w: string) => w[0])
+              .join("")
+              .toUpperCase()
+              .slice(0, 2);
+            const rawTags: string[] =
+              Array.isArray(t.tags) && t.tags.length > 0 ? t.tags : [];
+            return {
+              id: t.id,
+              trip_id: t.id,
+              name: tripName,
+              destination: t.destination || "",
+              start_date: t.start_date,
+              end_date: t.end_date,
+              status: t.status,
+              days:
+                t.start_date && t.end_date
+                  ? Math.max(
+                      1,
+                      Math.ceil(
+                        (new Date(t.end_date).getTime() -
+                          new Date(t.start_date).getTime()) /
+                          86400000,
+                      ) + 1,
+                    )
+                  : 3,
+              places: 0,
+              likes: likeMap[t.id] || 0,
+              comments: commentMap[t.id] || 0,
+              rating: parseFloat((4.0 + Math.random() * 0.9).toFixed(1)),
+              gradient: t.cover_gradient || GRADIENTS[i % GRADIENTS.length],
+              tags: rawTags,
+              author: authorName,
+              authorAvatar,
+              image: undefined,
+              created_at: t.created_at || new Date().toISOString(),
+            } as PublicTrip;
+          });
+          setTrips(mapped);
         }
-      }
-      setLoading(false)
-    })
-  }, [])
+        setLoading(false);
+      },
+    );
+  }, []);
 
   const showToast = (msg: string) => {
-    setSaveToast(msg)
-    setTimeout(() => setSaveToast(null), 3000)
-  }
+    setSaveToast(msg);
+    setTimeout(() => setSaveToast(null), 3000);
+  };
 
   const handleSave = async (e: React.MouseEvent, trip: PublicTrip) => {
-    e.stopPropagation()
-    if (!supabase) { showToast("Login dulu untuk menyimpan trip"); return }
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { showToast("Login dulu untuk menyimpan trip"); return }
+    e.stopPropagation();
+    if (!supabase) {
+      showToast("Login dulu untuk menyimpan trip");
+      return;
+    }
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      showToast("Login dulu untuk menyimpan trip");
+      return;
+    }
 
     // Toggle: if already saved, unsave it
     if (savedTripIds.has(trip.id)) {
-      await supabase.from('saved_trips').delete()
-        .eq('user_id', user.id)
-        .eq('original_trip_id', trip.id)
-      setSavedTripIds(prev => { const s = new Set(prev); s.delete(trip.id); return s })
-      showToast("❌ Dihapus dari Disimpan")
-      return
+      await supabase
+        .from("saved_trips")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("original_trip_id", trip.id);
+      setSavedTripIds((prev) => {
+        const s = new Set(prev);
+        s.delete(trip.id);
+        return s;
+      });
+      showToast("❌ Dihapus dari Disimpan");
+      return;
     }
 
-    setSavingId(trip.id)
+    setSavingId(trip.id);
     try {
       await saveTrip({
         original_trip_id: trip.id,
@@ -218,29 +244,72 @@ export function Explore({ navigateTo }: ExploreProps) {
         start_date: trip.start_date || undefined,
         end_date: trip.end_date || undefined,
         tags: trip.tags,
-      })
-      setSavedTripIds(prev => new Set([...prev, trip.id]))
-      showToast("❤️ Trip disimpan ke Disimpan!")
+      });
+      setSavedTripIds((prev) => new Set([...prev, trip.id]));
+      showToast("❤️ Trip disimpan ke Disimpan!");
     } catch (err) {
-      console.error("Save trip error:", err)
-      showToast("Gagal menyimpan trip. Coba lagi.")
+      console.error("Save trip error:", err);
+      showToast("Gagal menyimpan trip. Coba lagi.");
     } finally {
-      setSavingId(null)
+      setSavingId(null);
     }
+  };
+
+  // Destination keyword → category mapping for trips that lack proper tags
+  const DEST_KEYWORDS: Record<string, string[]> = {
+    beach:    ["bali","lombok","gili","bunaken","raja ampat","labuan bajo","komodo","manado","kepulauan","nusa","pantai","karimunjawa","derawan","belitung","anambas"],
+    mountain: ["bromo","ijen","rinjani","semeru","merapi","sindoro","sumbing","kerinci","toba","danau","papua","toraja","batak","dieng","lawu"],
+    city:     ["jakarta","surabaya","bandung","medan","semarang","makassar","yogyakarta","jogja","solo","malang","denpasar","palembang","pekanbaru","tokyo","singapore","kuala lumpur","bangkok","seoul"],
+    culinary: ["solo","semarang","makassar","padang","medan","penang","kuliner","foodie"],
+    culture:  ["yogyakarta","jogja","borobudur","prambanan","toraja","bali","ubud","solo","surakarta","banyuwangi","budaya"],
   }
 
-  const filteredTrips = trips.filter(trip => {
-    const matchesCategory = selectedCategory === "all" || trip.tags.includes(selectedCategory)
-    const matchesSearch = trip.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         trip.destination?.toLowerCase().includes(searchQuery.toLowerCase())
-    return matchesCategory && matchesSearch
-  })
+  const inferCategory = (trip: PublicTrip): string[] => {
+    const dest = (trip.destination + " " + trip.name).toLowerCase()
+    return Object.entries(DEST_KEYWORDS)
+      .filter(([, keywords]) => keywords.some(kw => dest.includes(kw)))
+      .map(([cat]) => cat)
+  }
+
+  const filteredTrips = trips.filter((trip) => {
+    const effectiveTags = trip.tags.length > 0 ? trip.tags : inferCategory(trip)
+    const matchesCategory =
+      selectedCategory === "all" || effectiveTags.includes(selectedCategory)
+    const q = searchQuery.toLowerCase()
+    const matchesSearch =
+      !q ||
+      trip.name?.toLowerCase().includes(q) ||
+      trip.destination?.toLowerCase().includes(q) ||
+      trip.author?.toLowerCase().includes(q)
+    return matchesCategory && matchesSearch;
+  });
 
   const sortedTrips = [...filteredTrips].sort((a, b) => {
-    if (sortBy === "popular") return b.likes - a.likes
-    if (sortBy === "rating") return b.rating - a.rating
-    return 0
-  })
+    if (sortBy === "popular") return b.likes - a.likes;
+    if (sortBy === "rating") return b.rating - a.rating;
+    // recent: newest first by created_at
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+
+  // Trending tags: most popular destinations by like-weighted frequency (from real DB data)
+  const trendingTags = useMemo(() => {
+    const freq: Record<string, number> = {}
+    trips.forEach(t => {
+      const city = t.destination?.split(",")[0]?.trim()
+      if (city) freq[city] = (freq[city] || 0) + t.likes + 1
+    })
+    return Object.entries(freq)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([city]) => ({ label: `#${city.replace(/\s+/g, "")}`, query: city }))
+  }, [trips])
+
+  // Resolve destination images: static map → Pexels API fallback
+  const destinationList = useMemo(
+    () => trips.map((t) => t.destination).filter(Boolean),
+    [trips],
+  );
+  const destinationImages = useDestinationImages(destinationList);
 
   return (
     <div className="pt-16 min-h-screen">
@@ -267,7 +336,7 @@ export function Explore({ navigateTo }: ExploreProps) {
                     "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all",
                     selectedCategory === cat.id
                       ? "bg-gradient-to-r from-[var(--aurora-start)] to-[var(--aurora-end)] text-white shadow-lg"
-                      : "glass-card hover:bg-white/20"
+                      : "glass-card hover:bg-white/20",
                   )}
                 >
                   <span>{cat.emoji}</span>
@@ -290,19 +359,35 @@ export function Explore({ navigateTo }: ExploreProps) {
           </div>
         </div>
 
-        {/* Trending Tags */}
-        <div className="mb-6 flex items-center gap-2 overflow-x-auto">
-          <span className="text-sm text-muted-foreground shrink-0">Trending:</span>
-          {["#Bali", "#Tokyo", "#JalanJalan", "#Foodie", "#Adventure", "#Romantis"].map((tag, i) => (
-            <button
-              key={i}
-              className="shrink-0 px-3 py-1 rounded-full text-xs font-medium glass-card hover:bg-white/20 transition-colors flex items-center gap-1"
-            >
-              <TrendingUp className="w-3 h-3" />
-              {tag}
-            </button>
-          ))}
-        </div>
+        {/* Trending Tags — real-time from DB, weighted by likes */}
+        {trendingTags.length > 0 && (
+          <div className="mb-6 flex items-center gap-2 overflow-x-auto">
+            <span className="text-sm text-muted-foreground shrink-0">
+              Trending:
+            </span>
+            {trendingTags.map((tag) => (
+              <button
+                key={tag.label}
+                onClick={() => setSearchQuery(tag.query)}
+                className={cn(
+                  "shrink-0 px-3 py-1 rounded-full text-xs font-medium glass-card hover:bg-white/20 transition-colors flex items-center gap-1",
+                  searchQuery === tag.query && "bg-gradient-to-r from-[var(--aurora-start)] to-[var(--aurora-end)] text-white border-transparent"
+                )}
+              >
+                <TrendingUp className="w-3 h-3" />
+                {tag.label}
+              </button>
+            ))}
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="shrink-0 px-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                ✕ Reset
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Loading */}
         {loading ? (
@@ -317,7 +402,8 @@ export function Explore({ navigateTo }: ExploreProps) {
             </div>
             <h3 className="text-xl font-bold mb-3">Belum ada trip publik</h3>
             <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-              Jadilah yang pertama mempublish tripmu! Buat itinerary dan bagikan ke komunitas.
+              Jadilah yang pertama mempublish tripmu! Buat itinerary dan bagikan
+              ke komunitas.
             </p>
             <Button variant="gradient" onClick={() => navigateTo("editor")}>
               <Plane className="w-4 h-4 mr-2" />
@@ -339,22 +425,26 @@ export function Explore({ navigateTo }: ExploreProps) {
                 {/* Image */}
                 <div className="aspect-[4/3] rounded-t-2xl relative overflow-hidden">
                   {/* Always-visible gradient background */}
-                  <div className={cn("absolute inset-0 bg-gradient-to-br", trip.gradient)} />
+                  <div
+                    className={cn(
+                      "absolute inset-0 bg-gradient-to-br",
+                      trip.gradient,
+                    )}
+                  />
                   <div className="absolute inset-0 flex items-center justify-center opacity-20">
                     <span className="text-7xl">🌏</span>
                   </div>
                   {/* Image overlays gradient */}
-                  {(() => {
-                    const imgSrc = trip.image || getDestinationImage(trip.destination)
-                    return imgSrc ? (
-                      <img
-                        src={imgSrc}
-                        alt={trip.name}
-                        className="absolute inset-0 w-full h-full object-cover"
-                        onError={(e) => { e.currentTarget.style.display = "none" }}
-                      />
-                    ) : null
-                  })()}
+                  {destinationImages[trip.destination] && (
+                    <img
+                      src={destinationImages[trip.destination]}
+                      alt={trip.destination}
+                      className="absolute inset-0 w-full h-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.style.display = "none";
+                      }}
+                    />
+                  )}
 
                   {/* Actions — Share + Simpan */}
                   <div className="absolute top-3 right-3 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -362,18 +452,35 @@ export function Explore({ navigateTo }: ExploreProps) {
                       onClick={(e) => handleSave(e, trip)}
                       disabled={savingId === trip.id}
                       className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/30 transition-all"
-                      title={savedTripIds.has(trip.id) ? "Hapus dari Disimpan" : "Simpan ke Disimpan"}
+                      title={
+                        savedTripIds.has(trip.id)
+                          ? "Hapus dari Disimpan"
+                          : "Simpan ke Disimpan"
+                      }
                     >
-                      <Heart className={cn("w-4 h-4", savedTripIds.has(trip.id) ? "fill-red-400 text-red-400" : "")} />
+                      <Heart
+                        className={cn(
+                          "w-4 h-4",
+                          savedTripIds.has(trip.id)
+                            ? "fill-red-400 text-red-400"
+                            : "",
+                        )}
+                      />
                     </button>
                     <button
                       onClick={async (e) => {
-                        e.stopPropagation()
-                        const url = `${window.location.origin}/explore?trip=${trip.id}`
+                        e.stopPropagation();
+                        const url = `${window.location.origin}/explore?trip=${trip.id}`;
                         if (navigator.share) {
-                          try { await navigator.share({ title: trip.name, text: `Check out this trip: ${trip.name}`, url }) } catch {}
+                          try {
+                            await navigator.share({
+                              title: trip.name,
+                              text: `Check out this trip: ${trip.name}`,
+                              url,
+                            });
+                          } catch {}
                         } else {
-                          await navigator.clipboard.writeText(url)
+                          await navigator.clipboard.writeText(url);
                         }
                       }}
                       className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/30 transition-all"
@@ -417,11 +524,15 @@ export function Explore({ navigateTo }: ExploreProps) {
                           {trip.authorAvatar}
                         </AvatarFallback>
                       </Avatar>
-                      <span className="text-sm text-muted-foreground">@{trip.author}</span>
+                      <span className="text-sm text-muted-foreground">
+                        @{trip.author}
+                      </span>
                     </div>
                     <div className="flex items-center gap-1">
                       <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
-                      <span className="text-sm font-medium">{trip.rating.toFixed(1)}</span>
+                      <span className="text-sm font-medium">
+                        {trip.rating.toFixed(1)}
+                      </span>
                     </div>
                   </div>
 
@@ -431,9 +542,20 @@ export function Explore({ navigateTo }: ExploreProps) {
                       <button
                         className="flex items-center gap-1 hover:text-red-400 transition-colors"
                         onClick={(e) => handleSave(e, trip)}
-                        title={savedTripIds.has(trip.id) ? "Hapus dari Disimpan" : "Simpan ke Disimpan"}
+                        title={
+                          savedTripIds.has(trip.id)
+                            ? "Hapus dari Disimpan"
+                            : "Simpan ke Disimpan"
+                        }
                       >
-                        <Heart className={cn("w-4 h-4", savedTripIds.has(trip.id) ? "fill-red-400 text-red-400" : "")} />
+                        <Heart
+                          className={cn(
+                            "w-4 h-4",
+                            savedTripIds.has(trip.id)
+                              ? "fill-red-400 text-red-400"
+                              : "",
+                          )}
+                        />
                         {trip.likes}
                       </button>
                       <span className="flex items-center gap-1">
@@ -470,5 +592,5 @@ export function Explore({ navigateTo }: ExploreProps) {
         )}
       </AnimatePresence>
     </div>
-  )
+  );
 }
