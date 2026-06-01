@@ -1,8 +1,8 @@
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Globe, Search, TrendingUp, Heart, MessageSquare, Share2,
-  MapPin, Calendar, Users, Star, SlidersHorizontal,
-  ChevronDown, Loader2, Plane
+  MapPin, Calendar, Star,
+  Loader2, Plane
 } from "lucide-react"
 import { Button } from "../components/ui/button"
 import { Badge } from "../components/ui/badge"
@@ -412,32 +412,10 @@ export function Explore({ navigateTo }: ExploreProps) {
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [searchQuery, setSearchQuery] = useState("")
   const [sortBy, setSortBy] = useState<"popular" | "recent" | "rating">("popular")
-  const [savedTripIds, setSavedTripIds] = useState<string[]>([])
   const [trips, setTrips] = useState<PublicTrip[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedTrip, setSelectedTrip] = useState<PublicTrip | null>(null)
   const [saveToast, setSaveToast] = useState<string | null>(null)
-
-  // Load saved trip IDs for heart state on mount
-  // We track both real trip IDs and mock trip names (for null original_trip_id)
-  const [savedMockNames, setSavedMockNames] = useState<string[]>([])
-
-  useEffect(() => {
-    if (!supabase) return
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return
-      supabase!.from('saved_trips')
-        .select('original_trip_id, name')
-        .eq('user_id', user.id)
-        .then(({ data }) => {
-          if (!data) return
-          // Real trips: track by original_trip_id
-          setSavedTripIds(data.filter((s: any) => s.original_trip_id).map((s: any) => s.original_trip_id))
-          // Mock trips: track by name (original_trip_id is null)
-          setSavedMockNames(data.filter((s: any) => !s.original_trip_id).map((s: any) => s.name))
-        })
-    })
-  }, [])
 
   useEffect(() => {
     if (!supabase) {
@@ -499,102 +477,9 @@ export function Explore({ navigateTo }: ExploreProps) {
     })
   }, [])
 
-  // Check if a trip is saved (real by id, mock by name)
-  const isTripSaved = (trip: PublicTrip) => {
-    if (trip.id.startsWith('mock-')) return savedMockNames.includes(trip.name)
-    return savedTripIds.includes(trip.id)
-  }
-
   const showToast = (msg: string) => {
     setSaveToast(msg)
     setTimeout(() => setSaveToast(null), 3000)
-  }
-
-  const toggleSave = async (id: string) => {
-    const trip = trips.find(t => t.id === id)
-    if (!trip) return
-    const isMock = id.startsWith('mock-')
-    const isSaved = isMock ? savedMockNames.includes(trip.name) : savedTripIds.includes(id)
-    // Optimistic update
-    if (isMock) {
-      setSavedMockNames(prev =>
-        prev.includes(trip.name) ? prev.filter(n => n !== trip.name) : [...prev, trip.name]
-      )
-    } else {
-      setSavedTripIds(prev =>
-        prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-      )
-    }
-    if (!supabase) {
-      showToast("Login dulu untuk menyimpan trip")
-      return
-    }
-    try {
-      const { getSession } = await import("../lib/supabase")
-      const session = await getSession()
-      const userId = session?.user?.id
-      if (!userId) { showToast("Login dulu untuk menyimpan trip"); return }
-
-      if (!isSaved) {
-        // Save
-        if (isMock) {
-          // Mock trips: use original_trip_id = null, deduplicate by name
-          const { data: existing } = await supabase.from("saved_trips")
-            .select('id')
-            .eq('user_id', userId)
-            .is('original_trip_id', null)
-            .eq('name', trip.name)
-            .maybeSingle()
-
-          if (!existing) {
-            await supabase.from("saved_trips").insert({
-              user_id: userId,
-              original_trip_id: null,
-              name: trip.name,
-              destination: trip.destination,
-              days: trip.days,
-              tags: trip.tags || [],
-            })
-          }
-        } else {
-          await supabase.from("saved_trips").upsert({
-            user_id: userId,
-            original_trip_id: id,
-            name: trip.name,
-            destination: trip.destination,
-            days: trip.days,
-            tags: trip.tags || [],
-          }, { onConflict: 'user_id,original_trip_id' })
-        }
-        showToast("❤️ Trip disimpan ke Trip Saya → Disimpan")
-      } else {
-        // Unsave
-        if (isMock) {
-          await supabase.from("saved_trips").delete()
-            .eq('user_id', userId)
-            .is('original_trip_id', null)
-            .eq('name', trip.name)
-        } else {
-          await supabase.from("saved_trips").delete()
-            .eq('user_id', userId)
-            .eq('original_trip_id', id)
-        }
-        showToast("Trip dihapus dari simpanan")
-      }
-    } catch (err) {
-      console.error("Toggle save error:", err)
-      // Revert optimistic update
-      if (isMock) {
-        setSavedMockNames(prev =>
-          prev.includes(trip.name) ? prev.filter(n => n !== trip.name) : [...prev, trip.name]
-        )
-      } else {
-        setSavedTripIds(prev =>
-          prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-        )
-      }
-      showToast("Gagal menyimpan, coba lagi")
-    }
   }
 
   const filteredTrips = trips.filter(trip => {
@@ -724,19 +609,8 @@ export function Explore({ navigateTo }: ExploreProps) {
                     ) : null
                   })()}
 
-                  {/* Actions */}
+                  {/* Actions — hanya Share, Simpan dihapus (pakai Salin di modal) */}
                   <div className="absolute top-3 right-3 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); toggleSave(trip.id) }}
-                      className={cn(
-                        "w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-md transition-all",
-                        isTripSaved(trip)
-                          ? "bg-red-500 text-white"
-                          : "bg-white/20 text-white hover:bg-white/30"
-                      )}
-                    >
-                      <Heart className={cn("w-4 h-4", isTripSaved(trip) && "fill-current")} />
-                    </button>
                     <button
                       onClick={async (e) => {
                         e.stopPropagation()
@@ -820,6 +694,7 @@ export function Explore({ navigateTo }: ExploreProps) {
       <TripDetailModal
         trip={selectedTrip}
         onClose={() => setSelectedTrip(null)}
+        onCopied={() => showToast("✅ Trip berhasil disalin ke Trip Saya!")}
       />
 
       {/* Save toast notification */}
