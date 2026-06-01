@@ -111,8 +111,17 @@ export type SplitBillItem = {
   currency: string
   paid_by: string
   split_between: string[]
+  split_amounts?: Record<string, number>  // custom per-person amounts, null = equal split
+  category?: string
   settled: boolean
   created_at: string
+}
+
+export type TripMemberProfile = {
+  user_id: string
+  name: string
+  email: string
+  avatar_url?: string
 }
 
 // Get all trips for current user (owned + accepted member trips)
@@ -397,6 +406,56 @@ export async function addSplitBill(item: Omit<SplitBillItem, 'id' | 'created_at'
 
   if (error) throw error
   return data as SplitBillItem
+}
+
+// Get trip members + their profile info (name, email, avatar) for split bill auto-populate
+export async function getTripMembersWithProfiles(tripId: string): Promise<TripMemberProfile[]> {
+  if (!supabase) return []
+  const result: TripMemberProfile[] = []
+
+  // Get trip owner profile
+  const { data: trip } = await supabase
+    .from('trips')
+    .select('owner_id')
+    .eq('id', tripId)
+    .single()
+
+  if (trip?.owner_id) {
+    const { data: ownerProfile } = await supabase
+      .from('profiles')
+      .select('id, name, email, avatar_url')
+      .eq('id', trip.owner_id)
+      .single()
+    if (ownerProfile) {
+      result.push({
+        user_id: ownerProfile.id,
+        name: ownerProfile.name || ownerProfile.email?.split('@')[0] || 'Owner',
+        email: ownerProfile.email || '',
+        avatar_url: ownerProfile.avatar_url || undefined,
+      })
+    }
+  }
+
+  // Get accepted trip members
+  const { data: members } = await supabase
+    .from('trip_members')
+    .select('user_id, name, email')
+    .eq('trip_id', tripId)
+    .eq('status', 'accepted')
+
+  if (members) {
+    for (const m of members) {
+      if (!result.find(r => r.user_id === m.user_id)) {
+        result.push({
+          user_id: m.user_id,
+          name: m.name || m.email?.split('@')[0] || 'Member',
+          email: m.email || '',
+        })
+      }
+    }
+  }
+
+  return result
 }
 
 // Update itinerary item
