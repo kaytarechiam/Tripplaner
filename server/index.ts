@@ -20,7 +20,9 @@ import { checkClaude } from './services/claude.js'
 import { checkGemini } from './services/gemini.js'
 import { checkOpenAI } from './services/openai.js'
 
+// Load root .env first, then server/.env (server/.env takes precedence)
 dotenv.config({ path: path.resolve(__dirname, '../.env') })
+dotenv.config({ path: path.resolve(__dirname, '.env'), override: true })
 
 const app = express()
 const PORT = process.env.PORT || 3000

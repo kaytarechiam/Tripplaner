@@ -177,7 +177,44 @@ export function TripDetailModal({ trip, onClose, onCopied }: TripDetailModalProp
   const handleCopyToMyTrips = async () => {
     if (!startDate) { setError("Pilih tanggal mulai dulu"); return }
     if (!supabase) { setError("Supabase tidak dikonfigurasi"); return }
-    if (trip.id.startsWith('mock-')) { setError("Trip ini hanya contoh dan tidak bisa disalin. Buat trip baru dari menu Editor."); return }
+    if (trip.id.startsWith('mock-')) {
+      // Mock trips are demo data — copy as a blank trip template
+      setCopyLoading(true)
+      setError("")
+      try {
+        const { data: { user }, error: authError } = await supabase.auth.getUser()
+        if (authError || !user) { setError("Sesi kadaluarsa. Silakan login ulang."); return }
+        // Create blank trip from mock template (no itinerary items to copy)
+        const start = new Date(startDate + 'T00:00:00')
+        const end = new Date(start.getTime() + (trip.days - 1) * 86400000)
+        const endDate = end.toISOString().split('T')[0]
+        const { data: newTrip, error: tripErr } = await supabase.from('trips').insert({
+          owner_id: user.id,
+          title: `[Template] ${trip.name}`,
+          destination: trip.destination,
+          start_date: startDate,
+          end_date: endDate,
+          status: 'planning',
+          is_public: false,
+          tags: trip.tags || [],
+        }).select().single()
+        if (tripErr) throw tripErr
+        // Auto-add owner to trip_members
+        await supabase.from('trip_members').upsert({
+          trip_id: newTrip.id, user_id: user.id,
+          name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Owner',
+          email: user.email || '', role: 'owner', status: 'accepted', invited_by: user.id,
+        }, { onConflict: 'trip_id,user_id' })
+        setCopied(true)
+        setTimeout(() => { onCopied?.(); onClose() }, 1200)
+      } catch (err: unknown) {
+        console.error("Copy mock trip error:", err)
+        setError(err instanceof Error ? err.message : "Gagal membuat trip. Coba lagi.")
+      } finally {
+        setCopyLoading(false)
+      }
+      return
+    }
     setCopyLoading(true)
     setError("")
     try {
