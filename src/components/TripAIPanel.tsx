@@ -147,15 +147,25 @@ async function applySuggestion(
   onDone: () => void
 ): Promise<void> {
   const { change } = suggestion
-  const itemId = changeGetItemId(change)
-  const item = itemId ? items.find(i => i.id === itemId) : undefined
-  if (!itemId) return
 
   try {
+    // Handle 'add' before the itemId lookup (add has no existing itemId)
+    if (change.type === 'add') {
+      await addItineraryItem({ ...change.item, trip_id: tripId })
+      onDone()
+      return
+    }
+
+    const itemId = changeGetItemId(change)
+    const item = itemId ? items.find(i => i.id === itemId) : undefined
+    if (!itemId) return
+
     if (change.type === 'delete') {
       await deleteItineraryItem(itemId)
     } else if (change.type === 'update_time' && item) {
       await updateItineraryItem(item.id, { time: change.newTime })
+    } else if (change.type === 'update_category' && item) {
+      await updateItineraryItem(item.id, { category: change.newCategory as any })
     } else if (change.type === 'swap') {
       const itemA = items.find(i => i.id === change.itemIdA)
       const itemB = items.find(i => i.id === change.itemIdB)

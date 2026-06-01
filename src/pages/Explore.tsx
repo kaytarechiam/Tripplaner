@@ -10,7 +10,7 @@ import { Avatar, AvatarFallback } from "../components/ui/avatar"
 import { Input } from "../components/ui/input"
 import { cn } from "@/lib/utils"
 import { useState, useEffect } from "react"
-import { supabase } from "../lib/supabase"
+import { supabase, saveTrip } from "../lib/supabase"
 import { TripDetailModal } from "../components/TripDetailModal"
 
 // Pre-seeded destination images from Unsplash (reliable, no API key needed)
@@ -84,329 +84,6 @@ const GRADIENTS = [
   "from-cyan-400 via-blue-500 to-indigo-600",
 ]
 
-// High-quality destination images from Unsplash
-const DEST_IMAGES: Record<string, string> = {
-  bali: "https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=800&q=80",
-  yogyakarta: "https://images.unsplash.com/photo-1598857938317-7e52f7c8e90f?w=800&q=80",
-  lombok: "https://images.unsplash.com/photo-1518509562904-e7ef99cdcc86?w=800&q=80",
-  jakarta: "https://images.unsplash.com/photo-1508807526345-15e9b5f4eaff?w=800&q=80",
-  bandung: "https://images.unsplash.com/photo-1556268736-1d26d4d8bdc9?w=800&q=80",
-  surabaya: "https://images.unsplash.com/photo-1580130712686-1c5e5d5e4c7a?w=800&q=80",
-  komodo: "https://images.unsplash.com/photo-1559827291-72ee739d0d9a?w=800&q=80",
-  rajampat: "https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?w=800&q=80",
-  bromo: "https://images.unsplash.com/photo-1580057573934-bfd0f7b29e40?w=800&q=80",
-  semarang: "https://images.unsplash.com/photo-1570521462031-7e80f2f76f36?w=800&q=80",
-  malang: "https://images.unsplash.com/photo-1583508915901-b46f4c9b59a0?w=800&q=80",
-  denpasar: "https://images.unsplash.com/photo-1518544801976-3e159e50e5bb?w=800&q=80",
-}
-
-// Mock trending trips for dev mode
-const MOCK_TRIPS: PublicTrip[] = [
-  {
-    id: "mock-1",
-    trip_id: "mock-1",
-    name: "3 Hari Menjelajahi Bali Utara",
-    destination: "Bali, Indonesia",
-    start_date: "2026-06-15",
-    end_date: "2026-06-17",
-    status: "planning",
-    days: 3,
-    places: 8,
-    likes: 1243,
-    comments: 89,
-    rating: 4.9,
-    gradient: "from-emerald-400 via-teal-500 to-blue-500",
-    tags: ["beach", "culture"],
-    author: "traveler_bali",
-    authorAvatar: "TB",
-    image: DEST_IMAGES.bali,
-  },
-  {
-    id: "mock-2",
-    trip_id: "mock-2",
-    name: "Weekend Food Tour Jakarta",
-    destination: "Jakarta, Indonesia",
-    start_date: "2026-05-25",
-    end_date: "2026-05-26",
-    status: "active",
-    days: 2,
-    places: 12,
-    likes: 892,
-    comments: 56,
-    rating: 4.7,
-    gradient: "from-rose-400 via-purple-500 to-indigo-600",
-    tags: ["culinary", "city"],
-    author: "foodie_jkt",
-    authorAvatar: "FJ",
-    image: DEST_IMAGES.jakarta,
-  },
-  {
-    id: "mock-3",
-    trip_id: "mock-3",
-    name: "Petualangan Gunung Bromo",
-    destination: "Bromo, Jawa Timur",
-    start_date: "2026-07-01",
-    end_date: "2026-07-02",
-    status: "planning",
-    days: 2,
-    places: 5,
-    likes: 2156,
-    comments: 134,
-    rating: 4.8,
-    gradient: "from-amber-400 via-orange-500 to-red-600",
-    tags: ["mountain", "nature"],
-    author: "adventure_seeker",
-    authorAvatar: "AS",
-    image: DEST_IMAGES.bromo,
-  },
-  {
-    id: "mock-4",
-    trip_id: "mock-4",
-    name: "Romantis di Yogyakarta",
-    destination: "Yogyakarta, Indonesia",
-    start_date: "2026-08-10",
-    end_date: "2026-08-13",
-    status: "planning",
-    days: 4,
-    places: 10,
-    likes: 1567,
-    comments: 98,
-    rating: 4.9,
-    gradient: "from-pink-400 via-rose-500 to-red-500",
-    tags: ["culture", "city"],
-    author: "yogi_lover",
-    authorAvatar: "YL",
-    image: DEST_IMAGES.yogyakarta,
-  },
-  {
-    id: "mock-5",
-    trip_id: "mock-5",
-    name: "Surf Camp di Lombok",
-    destination: "Lombok, NTB",
-    start_date: "2026-09-05",
-    end_date: "2026-09-09",
-    status: "planning",
-    days: 5,
-    places: 7,
-    likes: 1893,
-    comments: 112,
-    rating: 4.8,
-    gradient: "from-cyan-400 via-blue-500 to-indigo-600",
-    tags: ["beach", "nature"],
-    author: "surf_chick",
-    authorAvatar: "SC",
-    image: DEST_IMAGES.lombok,
-  },
-  {
-    id: "mock-6",
-    trip_id: "mock-6",
-    name: "Road Trip Bandung ke Ciwidey",
-    destination: "Bandung, Jawa Barat",
-    start_date: "2026-05-30",
-    end_date: "2026-06-01",
-    status: "active",
-    days: 3,
-    places: 9,
-    likes: 756,
-    comments: 43,
-    rating: 4.6,
-    gradient: "from-fuchsia-400 via-pink-500 to-rose-600",
-    tags: ["mountain", "culinary"],
-    author: "roadtrippers",
-    authorAvatar: "RT",
-    image: DEST_IMAGES.bandung,
-  },
-  {
-    id: "mock-7",
-    trip_id: "mock-7",
-    name: "Diving Paradise Raja Ampat",
-    destination: "Raja Ampat, Papua",
-    start_date: "2026-10-15",
-    end_date: "2026-10-22",
-    status: "planning",
-    days: 7,
-    places: 6,
-    likes: 3421,
-    comments: 201,
-    rating: 4.9,
-    gradient: "from-cyan-400 via-blue-500 to-indigo-600",
-    tags: ["beach", "nature"],
-    author: "dive_master",
-    authorAvatar: "DM",
-    image: DEST_IMAGES.rajaapat,
-  },
-  {
-    id: "mock-8",
-    trip_id: "mock-8",
-    name: "City Break di Surabaya",
-    destination: "Surabaya, Jawa Timur",
-    start_date: "2026-06-20",
-    end_date: "2026-06-21",
-    status: "completed",
-    days: 2,
-    places: 8,
-    likes: 432,
-    comments: 28,
-    rating: 4.5,
-    gradient: "from-rose-400 via-purple-500 to-indigo-600",
-    tags: ["city", "culinary"],
-    author: "surabaya_native",
-    authorAvatar: "SN",
-    image: DEST_IMAGES.surabaya,
-  },
-  {
-    id: "mock-9",
-    trip_id: "mock-9",
-    name: "Petualangan Komodo & Pink Beach",
-    destination: "Komodo, NTT",
-    start_date: "2026-11-01",
-    end_date: "2026-11-05",
-    status: "planning",
-    days: 5,
-    places: 8,
-    likes: 2765,
-    comments: 156,
-    rating: 4.9,
-    gradient: "from-emerald-400 via-teal-500 to-blue-500",
-    tags: ["beach", "nature"],
-    author: "eco_traveler",
-    authorAvatar: "ET",
-    image: DEST_IMAGES.komodo,
-  },
-  {
-    id: "mock-10",
-    trip_id: "mock-10",
-    name: "Weekend di Kota Semarang",
-    destination: "Semarang, Jawa Tengah",
-    start_date: "2026-06-15",
-    end_date: "2026-06-17",
-    status: "active",
-    days: 3,
-    places: 10,
-    likes: 543,
-    comments: 34,
-    rating: 4.5,
-    gradient: "from-amber-400 via-orange-500 to-red-600",
-    tags: ["culinary", "city", "culture"],
-    author: "semarang_walker",
-    authorAvatar: "SW",
-    image: DEST_IMAGES.semarang,
-  },
-  {
-    id: "mock-11",
-    trip_id: "mock-11",
-    name: "Healing di Malang & Batu",
-    destination: "Malang, Jawa Timur",
-    start_date: "2026-07-10",
-    end_date: "2026-07-14",
-    status: "planning",
-    days: 4,
-    places: 9,
-    likes: 1234,
-    comments: 67,
-    rating: 4.7,
-    gradient: "from-emerald-400 via-teal-500 to-blue-500",
-    tags: ["nature", "mountain"],
-    author: "heal_seeker",
-    authorAvatar: "HS",
-    image: DEST_IMAGES.malang,
-  },
-  {
-    id: "mock-12",
-    trip_id: "mock-12",
-    name: "Explore Budaya & Kuliner Solo",
-    destination: "Solo, Jawa Tengah",
-    start_date: "2026-08-01",
-    end_date: "2026-08-03",
-    status: "completed",
-    days: 3,
-    places: 11,
-    likes: 876,
-    comments: 52,
-    rating: 4.6,
-    gradient: "from-pink-400 via-rose-500 to-red-500",
-    tags: ["culture", "culinary"],
-    author: "solo_explorer",
-    authorAvatar: "SE",
-    image: DEST_IMAGES.yogyakarta,
-  },
-  {
-    id: "mock-13",
-    trip_id: "mock-13",
-    name: "Petualangan 5 Hari di Yogyakarta",
-    destination: "Yogyakarta, Indonesia",
-    start_date: "2026-07-10",
-    end_date: "2026-07-14",
-    status: "planning",
-    days: 5,
-    places: 14,
-    likes: 2156,
-    comments: 134,
-    rating: 4.9,
-    gradient: "from-amber-400 via-orange-500 to-red-500",
-    tags: ["culture", "history", "nature"],
-    author: "jogja_lover",
-    authorAvatar: "JL",
-    image: "https://images.unsplash.com/photo-1596546731098-4f4e5ad6e3a5?w=800&q=80",
-  },
-  {
-    id: "mock-14",
-    trip_id: "mock-14",
-    name: "Weekend Escape ke Bandung",
-    destination: "Bandung, Jawa Barat",
-    start_date: "2026-06-20",
-    end_date: "2026-06-22",
-    status: "planning",
-    days: 2,
-    places: 8,
-    likes: 1823,
-    comments: 98,
-    rating: 4.7,
-    gradient: "from-green-400 via-emerald-500 to-teal-500",
-    tags: ["nature", "culinary"],
-    author: "bandung_explorer",
-    authorAvatar: "BE",
-    image: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&q=80",
-  },
-  {
-    id: "mock-15",
-    trip_id: "mock-15",
-    name: "Liburan Musim Panas di Lombok",
-    destination: "Lombok, NTB",
-    start_date: "2026-08-15",
-    end_date: "2026-08-20",
-    status: "planning",
-    days: 5,
-    places: 12,
-    likes: 1654,
-    comments: 87,
-    rating: 4.8,
-    gradient: "from-cyan-400 via-blue-500 to-indigo-500",
-    tags: ["beach", "nature"],
-    author: "lombok_traveler",
-    authorAvatar: "LT",
-    image: "https://images.unsplash.com/photo-1517760444937-f6397edcbbcd?w=800&q=80",
-  },
-  {
-    id: "mock-16",
-    trip_id: "mock-16",
-    name: "Backpacking Budaya Jawa Timur",
-    destination: "Jawa Timur, Indonesia",
-    start_date: "2026-09-01",
-    end_date: "2026-09-07",
-    status: "planning",
-    days: 7,
-    places: 18,
-    likes: 987,
-    comments: 45,
-    rating: 4.6,
-    gradient: "from-purple-400 via-pink-500 to-rose-500",
-    tags: ["culture", "history"],
-    author: "jawa_explorer",
-    authorAvatar: "JE",
-    image: "https://images.unsplash.com/photo-1537531383496-f4749b8032cf?w=800&q=80",
-  },
-]
 
 export function Explore({ navigateTo }: ExploreProps) {
   const [selectedCategory, setSelectedCategory] = useState("all")
@@ -416,14 +93,25 @@ export function Explore({ navigateTo }: ExploreProps) {
   const [loading, setLoading] = useState(true)
   const [selectedTrip, setSelectedTrip] = useState<PublicTrip | null>(null)
   const [saveToast, setSaveToast] = useState<string | null>(null)
+  const [savedTripIds, setSavedTripIds] = useState<Set<string>>(new Set())
+  const [savingId, setSavingId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!supabase) {
-      // Dev mode: show mock trending trips
-      setTrips(MOCK_TRIPS)
+      setTrips([])
       setLoading(false)
       return
     }
+    // Load saved trip IDs for the current user (to show heart state)
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        supabase!.from('saved_trips').select('original_trip_id').eq('user_id', user.id)
+          .then(({ data }) => {
+            if (data) setSavedTripIds(new Set(data.map((r: any) => r.original_trip_id).filter(Boolean)))
+          })
+      }
+    })
+
     // Fetch trips + their like/comment counts in parallel
     Promise.all([
       supabase
@@ -436,7 +124,7 @@ export function Explore({ navigateTo }: ExploreProps) {
       supabase.from('trip_comments').select('trip_id'),
     ]).then(([{ data, error }, { data: likesData }, { data: commentsData }]) => {
       if (error || !data || data.length === 0) {
-        setTrips(MOCK_TRIPS)
+        setTrips([])
       } else {
         // Build count maps
         const likeMap: Record<string, number> = {}
@@ -480,6 +168,43 @@ export function Explore({ navigateTo }: ExploreProps) {
   const showToast = (msg: string) => {
     setSaveToast(msg)
     setTimeout(() => setSaveToast(null), 3000)
+  }
+
+  const handleSave = async (e: React.MouseEvent, trip: PublicTrip) => {
+    e.stopPropagation()
+    if (!supabase) { showToast("Login dulu untuk menyimpan trip"); return }
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { showToast("Login dulu untuk menyimpan trip"); return }
+
+    // Toggle: if already saved, unsave it
+    if (savedTripIds.has(trip.id)) {
+      await supabase.from('saved_trips').delete()
+        .eq('user_id', user.id)
+        .eq('original_trip_id', trip.id)
+      setSavedTripIds(prev => { const s = new Set(prev); s.delete(trip.id); return s })
+      showToast("❌ Dihapus dari Disimpan")
+      return
+    }
+
+    setSavingId(trip.id)
+    try {
+      await saveTrip({
+        original_trip_id: trip.id,
+        name: trip.name,
+        destination: trip.destination,
+        days: trip.days,
+        start_date: trip.start_date || undefined,
+        end_date: trip.end_date || undefined,
+        tags: trip.tags,
+      })
+      setSavedTripIds(prev => new Set([...prev, trip.id]))
+      showToast("❤️ Trip disimpan ke Disimpan!")
+    } catch (err) {
+      console.error("Save trip error:", err)
+      showToast("Gagal menyimpan trip. Coba lagi.")
+    } finally {
+      setSavingId(null)
+    }
   }
 
   const filteredTrips = trips.filter(trip => {
@@ -609,8 +334,16 @@ export function Explore({ navigateTo }: ExploreProps) {
                     ) : null
                   })()}
 
-                  {/* Actions — hanya Share, Simpan dihapus (pakai Salin di modal) */}
+                  {/* Actions — Share + Simpan */}
                   <div className="absolute top-3 right-3 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => handleSave(e, trip)}
+                      disabled={savingId === trip.id}
+                      className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/30 transition-all"
+                      title={savedTripIds.has(trip.id) ? "Hapus dari Disimpan" : "Simpan ke Disimpan"}
+                    >
+                      <Heart className={cn("w-4 h-4", savedTripIds.has(trip.id) ? "fill-red-400 text-red-400" : "")} />
+                    </button>
                     <button
                       onClick={async (e) => {
                         e.stopPropagation()
@@ -673,10 +406,14 @@ export function Explore({ navigateTo }: ExploreProps) {
                   {/* Stats */}
                   <div className="flex items-center pt-2 border-t border-border">
                     <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Heart className="w-4 h-4" />
+                      <button
+                        className="flex items-center gap-1 hover:text-red-400 transition-colors"
+                        onClick={(e) => handleSave(e, trip)}
+                        title={savedTripIds.has(trip.id) ? "Hapus dari Disimpan" : "Simpan ke Disimpan"}
+                      >
+                        <Heart className={cn("w-4 h-4", savedTripIds.has(trip.id) ? "fill-red-400 text-red-400" : "")} />
                         {trip.likes}
-                      </span>
+                      </button>
                       <span className="flex items-center gap-1">
                         <MessageSquare className="w-4 h-4" />
                         {trip.comments}

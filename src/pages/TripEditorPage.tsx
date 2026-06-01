@@ -224,9 +224,10 @@ function AddPlaceModal({ open, onClose, tripId, tripDays, defaultDay = 1, onAdde
   const [showSearch, setShowSearch] = useState(false)
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Pre-fill from editItem (edit mode)
+  // Pre-fill from editItem (edit mode) OR reset form (add mode) when modal opens
   useEffect(() => {
-    if (editItem && open) {
+    if (!open) return
+    if (editItem) {
       setName(editItem.title || "")
       setSearchQuery(editItem.title || "")
       setCategory(DB_TO_FRONTEND_CAT[editItem.category] || "activity")
@@ -238,6 +239,12 @@ function AddPlaceModal({ open, onClose, tripId, tripDays, defaultDay = 1, onAdde
       setLat(editItem.latitude || null)
       setLng(editItem.longitude || null)
       setError("")
+    } else if (!prefill) {
+      // Add mode with no prefill: reset all fields
+      setName(""); setSearchQuery(""); setCategory("activity")
+      setDay(defaultDay); setTime("09:00"); setLocation("")
+      setNotes(""); setDuration(60); setLat(null); setLng(null)
+      setError(""); setSearchResults([]); setShowSearch(false)
     }
   }, [editItem, open])
 
