@@ -99,7 +99,7 @@ function useDashboardData() {
             // Fetch notifications
             const { data: notifData } = await supabase
               .from("notifications")
-              .select("id, type, title, body, link, read, created_at")
+              .select("id, type, title, body, action_url, read, created_at")
               .eq("user_id", userId)
               .order("created_at", { ascending: false })
               .limit(5)

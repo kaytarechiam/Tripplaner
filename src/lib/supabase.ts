@@ -318,12 +318,24 @@ export async function copyTripFull(
     .order('day_number', { ascending: true })
     .order('order', { ascending: true })
 
+  // Auto-add owner to trip_members so RLS allows subsequent itinerary inserts
+  await supabase.from('trip_members').upsert({
+    trip_id: newTrip.id,
+    user_id: user.id,
+    name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Owner',
+    email: user.email || '',
+    role: 'owner',
+    status: 'accepted',
+    invited_by: user.id,
+  }, { onConflict: 'trip_id,user_id' })
+
   if (sourceItems && sourceItems.length > 0) {
     const newItems = sourceItems.map(({ id, created_at, trip_id, ...item }: any) => ({
       ...item,
       trip_id: newTrip.id,
     }))
-    await supabase.from('itinerary_items').insert(newItems)
+    const { error: itemsErr } = await supabase.from('itinerary_items').insert(newItems)
+    if (itemsErr) console.warn('[copyTripFull] itinerary items copy warning:', itemsErr.message)
   }
 
   return newTrip as Trip
