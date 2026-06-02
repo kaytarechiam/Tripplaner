@@ -1,11 +1,15 @@
 // server/routes/ai.ts
+// Priority order: adaCODE (primary) → Gemini (fallback 1) → OpenAI (fallback 2)
+
 import { Router } from 'express'
+import { generateItineraryAdaCode, adaCodeChat, getAdaCode } from '../services/adacode.js'
 import { generateItinerary as generateGemini } from '../services/gemini.js'
 import { generateItineraryOpenAI } from '../services/openai.js'
-import { tripAIChat, getRecommendations } from '../services/gemini-rapidapi.js'
+import { tripAIChat } from '../services/gemini-rapidapi.js'
 
+// ─── Chat prompt builder (shared) ───────────────────────────────────────────
 function buildChatPrompt(message: string, context?: string, items?: any[]): string {
-  const ctx = context ? `Current itinerary:\n${context}\n---\n` : ''
+  const ctx       = context  ? `Current itinerary:\n${context}\n---\n`  : ''
   const itemsList = items?.length
     ? `\nExisting item IDs (use for update/delete):\n${items.map((i: any) => `- id:"${i.id}" title:"${i.title}" day:${i.day} time:${i.time}`).join('\n')}\n---\n`
     : ''
@@ -34,43 +38,79 @@ Return ONLY valid JSON — NO markdown, NO code fences:
 }`
 }
 
-async function geminiDirect(prompt: string): Promise<string> {
+// ─── Gemini direct chat (kept as fallback) ───────────────────────────────────
+async function geminiDirect(prompt: string, retries = 1): Promise<string> {
   const { GoogleGenerativeAI } = await import('@google/generative-ai')
   if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not set')
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
-  const result = await model.generateContent(prompt)
-  return result.response.text()
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+  try {
+    const result = await model.generateContent(prompt)
+    return result.response.text()
+  } catch (err: any) {
+    const msg: string = err?.message || String(err)
+    if (retries > 0 && (msg.includes('503') || msg.includes('Service Unavailable'))) {
+      console.warn('[AI] Gemini 503, retrying in 2s...')
+      await new Promise(r => setTimeout(r, 2000))
+      return geminiDirect(prompt, retries - 1)
+    }
+    throw err
+  }
 }
 
-async function geminiChat(message: string, context?: string, items?: any[]): Promise<{ reply: string; actions: any[] }> {
-  const prompt = buildChatPrompt(message, context, items)
+// ─── Unified chat function with fallback chain ───────────────────────────────
+async function runChat(
+  message: string,
+  context?: string,
+  items?: any[],
+): Promise<{ reply: string; actions: any[] }> {
 
-  // Try direct Gemini first
-  try {
-    const text = await geminiDirect(prompt)
-    const cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim()
-    const parsed = JSON.parse(cleaned)
-    return {
-      reply: parsed.reply || 'Oke!',
-      actions: Array.isArray(parsed.actions) ? parsed.actions : [],
+  // 1. adaCODE (primary)
+  if (getAdaCode()) {
+    try {
+      const result = await adaCodeChat(message, context, items)
+      console.log('[AI/Chat] Responded via adaCODE')
+      return result
+    } catch (err) {
+      console.warn('[AI/Chat] adaCODE failed, trying Gemini:', err instanceof Error ? err.message : err)
     }
-  } catch (directErr) {
-    console.warn('[AI/Chat] Direct Gemini failed, trying RapidAPI:', directErr instanceof Error ? directErr.message : String(directErr))
   }
 
-  // Fallback to RapidAPI Gemini
+  // 2. Gemini (fallback 1)
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const prompt  = buildChatPrompt(message, context, items)
+      const text    = await geminiDirect(prompt)
+      const cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim()
+      const parsed  = JSON.parse(cleaned)
+      console.log('[AI/Chat] Responded via Gemini fallback')
+      return { reply: parsed.reply || 'Oke!', actions: Array.isArray(parsed.actions) ? parsed.actions : [] }
+    } catch (err) {
+      console.warn('[AI/Chat] Gemini failed, trying RapidAPI:', err instanceof Error ? err.message : err)
+    }
+  }
+
+  // 3. RapidAPI Gemini (fallback 2)
   try {
     const result = await tripAIChat(message, context)
+    console.log('[AI/Chat] Responded via RapidAPI Gemini fallback')
     return { reply: result.reply || 'Maaf, coba lagi ya.', actions: [] }
-  } catch (rapidErr) {
-    console.error('[AI/Chat] All providers failed:', rapidErr instanceof Error ? rapidErr.message : String(rapidErr))
-    return { reply: 'Maaf, TripAI sedang tidak bisa membantu saat ini. Pastikan koneksi internet stabil.', actions: [] }
+  } catch (err) {
+    console.error('[AI/Chat] All providers failed:', err instanceof Error ? err.message : err)
+    return {
+      reply: 'Maaf, TripAI sedang tidak bisa membantu saat ini. Pastikan koneksi internet stabil.',
+      actions: [],
+    }
   }
 }
 
+// ─── Router ──────────────────────────────────────────────────────────────────
 const router = Router()
 
+/**
+ * POST /api/ai/generate-itinerary
+ * Priority: adaCODE → Gemini → OpenAI
+ */
 router.post('/generate-itinerary', async (req, res) => {
   try {
     const { destination, days, trip_type, budget, travelers, start_date, preferences } = req.body
@@ -91,24 +131,41 @@ router.post('/generate-itinerary', async (req, res) => {
 
     let result: any = null
 
-    // Try Gemini first
-    try {
-      result = await generateGemini(params)
-      console.log('[AI] Used Gemini successfully')
-    } catch (geminiErr: unknown) {
-      const msg = geminiErr instanceof Error ? geminiErr.message : String(geminiErr)
-      console.warn('[AI] Gemini failed, falling back to OpenAI:', msg)
-
-      // Fallback to OpenAI
+    // 1. adaCODE (primary)
+    if (getAdaCode()) {
       try {
-        result = await generateItineraryOpenAI(params)
-        console.log('[AI] Used OpenAI fallback successfully')
-      } catch (openaiErr: unknown) {
-        const openaiMsg = openaiErr instanceof Error ? openaiErr.message : String(openaiErr)
-        console.error('[AI] Both Gemini and OpenAI failed:', openaiMsg)
-        throw new Error(`All AI providers failed. Gemini: ${msg}. OpenAI: ${openaiMsg}`)
+        result = await generateItineraryAdaCode(params)
+        console.log('[AI/Generate] Used adaCODE ✓')
+      } catch (adaErr) {
+        console.warn('[AI/Generate] adaCODE failed, trying Gemini:', adaErr instanceof Error ? adaErr.message : adaErr)
       }
     }
+
+    // 2. Gemini (fallback 1)
+    if (!result && process.env.GEMINI_API_KEY) {
+      try {
+        result = await generateGemini(params)
+        console.log('[AI/Generate] Used Gemini fallback ✓')
+      } catch (geminiErr) {
+        console.warn('[AI/Generate] Gemini failed, trying OpenAI:', geminiErr instanceof Error ? geminiErr.message : geminiErr)
+      }
+    }
+
+    // 3. OpenAI (fallback 2)
+    if (!result && process.env.OPENAI_API_KEY) {
+      try {
+        result = await generateItineraryOpenAI(params)
+        console.log('[AI/Generate] Used OpenAI fallback ✓')
+      } catch (openaiErr) {
+        const msg = openaiErr instanceof Error ? openaiErr.message : String(openaiErr)
+        if (msg.includes('429') || msg.includes('quota') || msg.includes('billing')) {
+          throw new Error('OpenAI quota exceeded — add credits at platform.openai.com/billing')
+        }
+        throw openaiErr
+      }
+    }
+
+    if (!result) throw new Error('All AI providers unavailable. Cek API keys di .env')
 
     res.json(result)
   } catch (err: unknown) {
@@ -118,21 +175,10 @@ router.post('/generate-itinerary', async (req, res) => {
   }
 })
 
-router.post('/recommendations', async (req, res) => {
-  const { destination, tripType } = req.body
-  if (!destination) {
-    res.status(400).json({ message: 'destination is required' })
-    return
-  }
-  try {
-    const result = await getRecommendations(destination, tripType)
-    res.json(result)
-  } catch (err) {
-    console.error('[AI/Recommendations]', err instanceof Error ? err.message : err)
-    res.json({ places: [], restaurants: [], hidden_gems: [], local_tips: [] })
-  }
-})
-
+/**
+ * POST /api/ai/chat
+ * TripAI assistant — modify itinerary via natural language
+ */
 router.post('/chat', async (req, res) => {
   const { message, context, items } = req.body
   if (!message) {
@@ -140,11 +186,31 @@ router.post('/chat', async (req, res) => {
     return
   }
   try {
-    const result = await geminiChat(message, context, items)
+    const result = await runChat(message, context, items)
     res.json(result)
   } catch (err) {
     console.error('[AI/Chat]', err instanceof Error ? err.message : err)
     res.json({ reply: 'Maaf, TripAI sedang tidak bisa membantu saat ini.', actions: [] })
+  }
+})
+
+/**
+ * POST /api/ai/recommendations
+ * Destination recommendations (still uses RapidAPI Gemini)
+ */
+router.post('/recommendations', async (req, res) => {
+  const { destination, tripType } = req.body
+  if (!destination) {
+    res.status(400).json({ message: 'destination is required' })
+    return
+  }
+  try {
+    const { getRecommendations } = await import('../services/gemini-rapidapi.js')
+    const result = await getRecommendations(destination, tripType)
+    res.json(result)
+  } catch (err) {
+    console.error('[AI/Recommendations]', err instanceof Error ? err.message : err)
+    res.json({ places: [], restaurants: [], hidden_gems: [], local_tips: [] })
   }
 })
 
