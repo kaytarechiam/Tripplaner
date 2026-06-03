@@ -26,20 +26,38 @@ const TRIP_TYPES = [
   { id: "adventure", label: "Petualangan", icon: Zap, color: "from-blue-400 to-cyan-400" },
 ]
 
-const BUDGET_OPTIONS = [
-  { id: "Budget", label: "Budget" },
-  { id: "Menengah", label: "Menengah" },
-  { id: "Premium", label: "Premium" },
+// Budget presets per hari (min, max)
+const BUDGET_PRESETS = [
+  { label: "100rb",  min: 100_000,   max: 300_000   },
+  { label: "500rb",  min: 300_000,   max: 700_000   },
+  { label: "1jt",    min: 700_000,   max: 1_500_000 },
+  { label: "3jt",    min: 1_500_000, max: 3_500_000 },
+  { label: "5jt",    min: 3_500_000, max: 7_000_000 },
+  { label: "10jt",   min: 7_000_000, max: 15_000_000},
+  { label: "20jt+",  min: 15_000_000,max: 50_000_000},
 ]
 
-const BUDGET_MIN = 100000
-const BUDGET_MAX = 5000000
+const BUDGET_MIN = 0
+const BUDGET_MAX = 999_000_000
 
 // Format currency for display
 const formatRupiah = (val: number) => {
-  if (val >= 1000000) return `Rp ${(val / 1000000).toFixed(1)}jt`
-  if (val >= 1000) return `Rp ${(val / 1000).toFixed(0)}rb`
+  if (val >= 1_000_000_000) return `Rp ${(val / 1_000_000_000).toFixed(1)}M`
+  if (val >= 1_000_000) return `Rp ${(val / 1_000_000).toFixed(val % 1_000_000 === 0 ? 0 : 1)}jt`
+  if (val >= 1_000) return `Rp ${(val / 1_000).toFixed(0)}rb`
   return `Rp ${val}`
+}
+
+// Parse typed Rupiah string back to number
+const parseRupiahInput = (raw: string): number => {
+  const cleaned = raw.replace(/[^0-9]/g, '')
+  return cleaned ? parseInt(cleaned, 10) : 0
+}
+
+// Format number as plain thousand-separated for input display
+const formatInputDisplay = (val: number): string => {
+  if (!val) return ''
+  return val.toLocaleString('id-ID')
 }
 
 // Weather icon mapping from WMO codes
@@ -85,9 +103,9 @@ export function AIGeneratorPage({ navigateTo }: Props) {
     : 2
 
   const [people, setPeople] = useState(2)
-  // Budget: dual-thumb range
-  const [minBudget, setMinBudget] = useState(BUDGET_MIN)
-  const [maxBudget, setMaxBudget] = useState(BUDGET_MAX)
+  // Budget: free-input + presets (default ~1jt/hari)
+  const [minBudget, setMinBudget] = useState(BUDGET_PRESETS[2].min)
+  const [maxBudget, setMaxBudget] = useState(BUDGET_PRESETS[2].max)
   const [preferences, setPreferences] = useState<string[]>([])
   const [customMessage, setCustomMessage] = useState("")
   const [progress, setProgress] = useState(0)
@@ -136,12 +154,38 @@ export function AIGeneratorPage({ navigateTo }: Props) {
     setSuggestions([])
   }, [])
 
-  // Load existing trips when result is shown
+  // ─── Pre-fill from TripEditor context ───────────────────
+  const [prefillTripId, setPrefillTripId] = useState<string | null>(null)
+
   useEffect(() => {
-    if (result) {
-      getTrips().then(setExistingTrips).catch(() => setExistingTrips([]))
+    const raw = sessionStorage.getItem('ai_trip_context')
+    if (!raw) return
+    try {
+      const ctx = JSON.parse(raw)
+      if (ctx.destination) setCity(ctx.destination)
+      if (ctx.startDate) setStartDate(ctx.startDate)
+      if (ctx.endDate) setEndDate(ctx.endDate)
+      if (ctx.tripId) {
+        setPrefillTripId(ctx.tripId)
+        setSelectedExistingTrip(ctx.tripId)
+      }
+      // Clear so next visit to AI page starts fresh
+      sessionStorage.removeItem('ai_trip_context')
+    } catch { /* ignore malformed JSON */ }
+  }, [])
+
+  // Load existing trips when result is shown (also pre-load if prefill tripId exists)
+  useEffect(() => {
+    if (result || prefillTripId) {
+      getTrips().then(trips => {
+        setExistingTrips(trips)
+        // If prefillTripId is set and exists in trips, keep it selected
+        if (prefillTripId && trips.some((t: Trip) => t.id === prefillTripId)) {
+          setSelectedExistingTrip(prefillTripId)
+        }
+      }).catch(() => setExistingTrips([]))
     }
-  }, [result])
+  }, [result, prefillTripId])
 
   // ─── Reset form ──────────────────────────────────────
   const handleReset = useCallback(() => {
@@ -153,24 +197,22 @@ export function AIGeneratorPage({ navigateTo }: Props) {
     setStartDate("")
     setEndDate("")
     setPeople(2)
-    setMinBudget(BUDGET_MIN)
-    setMaxBudget(BUDGET_MAX)
+    setMinBudget(BUDGET_PRESETS[2].min)   // default: kisaran 1jt
+    setMaxBudget(BUDGET_PRESETS[2].max)
     setPreferences([])
     setCustomMessage("")
     setError("")
     setProgress(0)
     setProgressLabel("")
     setSavedTripId(null)
+    setPrefillTripId(null)
+    setSelectedExistingTrip("new")
   }, [])
 
   // ─── Main generate ───────────────────────────────────
   const handleGenerate = async () => {
     if (!city.trim()) {
       setError("Kota tujuan wajib diisi.")
-      return
-    }
-    if (!startDate) {
-      setError("Pilih tanggal mulai trip.")
       return
     }
 
@@ -230,10 +272,12 @@ export function AIGeneratorPage({ navigateTo }: Props) {
       setProgressLabel("Selesai!")
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Gagal generate itinerary"
-      if (msg.includes("not configured") || msg.includes("API") || msg.includes("Gemini")) {
-        setError("AI Generator belum aktif. Pastikan GEMINI_API_KEY sudah benar di server/.env")
+      if (msg.toLowerCase().includes("fetch") || msg.includes("ERR_") || msg.includes("network")) {
+        setError("Tidak bisa terhubung ke server. Pastikan server backend sudah berjalan (npm run dev).")
+      } else if (msg.includes("not configured") || msg.includes("API key") || msg.includes("ADACODE")) {
+        setError("AI belum dikonfigurasi. Pastikan ADACODE_API_KEY sudah benar di server/.env")
       } else {
-        setError(msg)
+        setError(msg || "Gagal generate itinerary. Coba lagi.")
       }
     } finally {
       setIsGenerating(false)
@@ -263,10 +307,20 @@ export function AIGeneratorPage({ navigateTo }: Props) {
         tripId = selectedExistingTrip
       }
 
+      // Map AI category values → DB-accepted values
+      const AI_TO_DB_CAT: Record<string, string> = {
+        hotel: 'accommodation', accommodation: 'accommodation',
+        landmark: 'attraction', nature: 'attraction', activity: 'attraction',
+        shopping: 'attraction', cultural: 'attraction', culture: 'attraction',
+        sightseeing: 'attraction', entertainment: 'attraction',
+        food: 'food', restaurant: 'food', culinary: 'food',
+        transport: 'transport', transportation: 'transport',
+      }
       // Save each itinerary item
       for (const day of result.itinerary) {
         for (let i = 0; i < day.items.length; i++) {
           const item = day.items[i]
+          const dbCategory = AI_TO_DB_CAT[(item.category || '').toLowerCase()] ?? 'attraction'
           await addItineraryItem({
             trip_id: tripId,
             day: day.day,
@@ -276,7 +330,7 @@ export function AIGeneratorPage({ navigateTo }: Props) {
             location: item.location,
             latitude: item.latitude,
             longitude: item.longitude,
-            category: (item.category as any) || "activity",
+            category: dbCategory as any,
             duration_minutes: item.duration_minutes,
             notes: item.tips,
             sort_order: i,
@@ -417,70 +471,98 @@ export function AIGeneratorPage({ navigateTo }: Props) {
                 )}
               </div>
 
-              {/* People */}
+              {/* People — stepper, no upper limit */}
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label className="!mb-0">Jumlah Orang</Label>
-                  <span className="font-bold text-lg w-8 text-right">{people} org</span>
+                <Label>Jumlah Orang</Label>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setPeople(p => Math.max(1, p - 1))}
+                    className="w-9 h-9 rounded-xl border border-input bg-secondary hover:bg-secondary/80 flex items-center justify-center text-lg font-bold transition-colors"
+                  >−</button>
+                  <input
+                    type="number"
+                    min={1}
+                    value={people}
+                    onChange={e => {
+                      const v = parseInt(e.target.value)
+                      if (!isNaN(v) && v >= 1) setPeople(v)
+                    }}
+                    className="flex-1 text-center rounded-xl border border-input bg-background px-3 py-2 text-sm font-semibold [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setPeople(p => p + 1)}
+                    className="w-9 h-9 rounded-xl border border-input bg-secondary hover:bg-secondary/80 flex items-center justify-center text-lg font-bold transition-colors"
+                  >+</button>
+                  <span className="text-sm text-muted-foreground whitespace-nowrap">orang</span>
                 </div>
-                <input
-                  type="range" min="1" max="10"
-                  value={people}
-                  onChange={e => setPeople(parseInt(e.target.value))}
-                  className="w-full accent-[var(--aurora-start)]"
-                />
               </div>
 
-              {/* Budget — Dual-thumb range slider */}
+              {/* Budget — free-input + preset chips */}
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label className="!mb-0">Budget</Label>
-                  <span className="text-xs font-medium text-muted-foreground">
-                    {formatRupiah(minBudget)} — {formatRupiah(maxBudget)}
-                  </span>
+                <Label>Budget per Hari</Label>
+
+                {/* Preset chips */}
+                <div className="flex flex-wrap gap-1.5">
+                  {BUDGET_PRESETS.map(p => {
+                    const active = minBudget === p.min && maxBudget === p.max
+                    return (
+                      <button
+                        key={p.label}
+                        type="button"
+                        onClick={() => { setMinBudget(p.min); setMaxBudget(p.max) }}
+                        className={cn(
+                          "px-3 py-1 rounded-full text-xs font-medium border transition-all",
+                          active
+                            ? "bg-gradient-to-r from-[var(--aurora-start)] to-[var(--aurora-end)] text-white border-transparent shadow-sm"
+                            : "border-input bg-secondary/60 hover:bg-secondary text-muted-foreground"
+                        )}
+                      >
+                        {p.label}
+                      </button>
+                    )
+                  })}
                 </div>
-                <div className="relative h-6">
-                  {/* Track background */}
-                  <div className="absolute top-1/2 -translate-y-1/2 w-full h-1.5 rounded-full bg-secondary" />
-                  {/* Active track */}
-                  <div
-                    className="absolute top-1/2 -translate-y-1/2 h-1.5 rounded-full bg-gradient-to-r from-[var(--aurora-start)] to-[var(--aurora-end)]"
-                    style={{
-                      left: `${((minBudget - BUDGET_MIN) / (BUDGET_MAX - BUDGET_MIN)) * 100}%`,
-                      right: `${100 - ((maxBudget - BUDGET_MIN) / (BUDGET_MAX - BUDGET_MIN)) * 100}%`,
-                    }}
-                  />
-                  {/* Min handle */}
-                  <input
-                    type="range"
-                    min={BUDGET_MIN}
-                    max={BUDGET_MAX}
-                    step={50000}
-                    value={minBudget}
-                    onChange={e => {
-                      const val = Number(e.target.value)
-                      if (val < maxBudget) setMinBudget(val)
-                    }}
-                    className="absolute w-full h-full appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[var(--aurora-start)] [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:shadow-lg [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-[var(--aurora-start)] [&::-moz-range-thumb]:cursor-pointer"
-                  />
-                  {/* Max handle */}
-                  <input
-                    type="range"
-                    min={BUDGET_MIN}
-                    max={BUDGET_MAX}
-                    step={50000}
-                    value={maxBudget}
-                    onChange={e => {
-                      const val = Number(e.target.value)
-                      if (val > minBudget) setMaxBudget(val)
-                    }}
-                    className="absolute w-full h-full appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[var(--aurora-end)] [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:shadow-lg [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-[var(--aurora-end)] [&::-moz-range-thumb]:cursor-pointer"
-                  />
+
+                {/* Min / Max inputs */}
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">Min</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={formatInputDisplay(minBudget)}
+                      onChange={e => {
+                        const v = parseRupiahInput(e.target.value)
+                        if (v >= 0) setMinBudget(v)
+                      }}
+                      className="w-full pl-9 pr-3 py-2 rounded-xl border border-input bg-background text-sm"
+                      placeholder="0"
+                    />
+                  </div>
+                  <span className="text-muted-foreground text-sm shrink-0">—</span>
+                  <div className="flex-1 relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">Max</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={formatInputDisplay(maxBudget)}
+                      onChange={e => {
+                        const v = parseRupiahInput(e.target.value)
+                        if (v >= 0) setMaxBudget(v)
+                      }}
+                      className="w-full pl-10 pr-3 py-2 rounded-xl border border-input bg-background text-sm"
+                      placeholder="0"
+                    />
+                  </div>
                 </div>
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>{formatRupiah(BUDGET_MIN)}</span>
-                  <span>{formatRupiah(BUDGET_MAX)}</span>
-                </div>
+                {minBudget > 0 && maxBudget > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {formatRupiah(minBudget)} – {formatRupiah(maxBudget)} per hari
+                    {people > 1 && ` · ${formatRupiah(minBudget * people)}–${formatRupiah(maxBudget * people)} total`}
+                  </p>
+                )}
               </div>
 
               {/* Preferences — FIXED: now sent to backend */}

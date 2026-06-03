@@ -110,44 +110,76 @@ const router = Router()
 /**
  * POST /api/ai/generate-itinerary
  * Priority: adaCODE → Gemini → OpenAI
+ * Uses SSE so Cloudflare heartbeats prevent 524 timeout during slow AI calls.
+ * Client reads the stream; the final "data: {...}" line is the itinerary JSON.
  */
 router.post('/generate-itinerary', async (req, res) => {
+  const { destination, days, trip_type, budget, travelers, start_date, preferences, custom_message, min_budget, max_budget } = req.body
+  if (!destination || !days) {
+    res.status(400).json({ message: 'destination and days are required' })
+    return
+  }
+
+  // ── SSE headers — keeps Cloudflare alive during slow AI calls ──
+  res.writeHead(200, {
+    'Content-Type':      'text/event-stream',
+    'Cache-Control':     'no-cache',
+    'Connection':        'keep-alive',
+    'X-Accel-Buffering': 'no',   // disable nginx buffering
+  })
+
+  // Heartbeat every 8 s — Cloudflare 524 fires at 100 s with no activity
+  const heartbeat = setInterval(() => {
+    try { res.write(': ping\n\n') } catch { clearInterval(heartbeat) }
+  }, 8_000)
+
+  const done = (data: any) => {
+    clearInterval(heartbeat)
+    res.write(`data: ${JSON.stringify(data)}\n\n`)
+    res.end()
+  }
+  const fail = (message: string) => {
+    clearInterval(heartbeat)
+    res.write(`event: error\ndata: ${JSON.stringify({ message })}\n\n`)
+    res.end()
+  }
+
+  const params = {
+    destination,
+    days: Number(days),
+    trip_type,
+    budget,
+    travelers: travelers ? Number(travelers) : undefined,
+    start_date,
+    preferences,
+    custom_message: custom_message || undefined,
+    min_budget: min_budget ? Number(min_budget) : undefined,
+    max_budget: max_budget ? Number(max_budget) : undefined,
+  }
+
   try {
-    const { destination, days, trip_type, budget, travelers, start_date, preferences } = req.body
-    if (!destination || !days) {
-      res.status(400).json({ message: 'destination and days are required' })
-      return
-    }
-
-    const params = {
-      destination,
-      days: Number(days),
-      trip_type,
-      budget,
-      travelers: travelers ? Number(travelers) : undefined,
-      start_date,
-      preferences,
-    }
-
     let result: any = null
 
-    // 1. adaCODE (primary)
-    if (getAdaCode()) {
+    // 1. Gemini (primary for generator — fast, low latency)
+    if (process.env.GEMINI_API_KEY) {
       try {
-        result = await generateItineraryAdaCode(params)
-        console.log('[AI/Generate] Used adaCODE ✓')
-      } catch (adaErr) {
-        console.warn('[AI/Generate] adaCODE failed, trying Gemini:', adaErr instanceof Error ? adaErr.message : adaErr)
+        result = await generateGemini(params)
+        console.log('[AI/Generate] Used Gemini ✓')
+      } catch (geminiErr) {
+        console.warn('[AI/Generate] Gemini failed:', geminiErr instanceof Error ? geminiErr.message : geminiErr)
       }
     }
 
-    // 2. Gemini (fallback 1)
-    if (!result && process.env.GEMINI_API_KEY) {
-      try {
-        result = await generateGemini(params)
-        console.log('[AI/Generate] Used Gemini fallback ✓')
-      } catch (geminiErr) {
-        console.warn('[AI/Generate] Gemini failed, trying OpenAI:', geminiErr instanceof Error ? geminiErr.message : geminiErr)
+    // 2. adaCODE (fallback 1)
+    if (!result) {
+      const adaClient = getAdaCode()
+      if (adaClient) {
+        try {
+          result = await generateItineraryAdaCode(params)
+          console.log('[AI/Generate] Used adaCODE fallback ✓')
+        } catch (adaErr) {
+          console.warn('[AI/Generate] adaCODE failed:', adaErr instanceof Error ? adaErr.message : adaErr)
+        }
       }
     }
 
@@ -159,19 +191,20 @@ router.post('/generate-itinerary', async (req, res) => {
       } catch (openaiErr) {
         const msg = openaiErr instanceof Error ? openaiErr.message : String(openaiErr)
         if (msg.includes('429') || msg.includes('quota') || msg.includes('billing')) {
-          throw new Error('OpenAI quota exceeded — add credits at platform.openai.com/billing')
+          fail('OpenAI quota exceeded — add credits at platform.openai.com/billing')
+          return
         }
         throw openaiErr
       }
     }
 
-    if (!result) throw new Error('All AI providers unavailable. Cek API keys di .env')
+    if (!result) { fail('All AI providers unavailable. Cek API keys di .env'); return }
 
-    res.json(result)
+    done(result)
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Failed to generate itinerary'
     console.error('[AI/Generate]', message)
-    res.status(500).json({ message })
+    fail(message)
   }
 })
 

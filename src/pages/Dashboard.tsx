@@ -1,80 +1,111 @@
-import { motion } from "framer-motion"
+import { motion } from "framer-motion";
 import {
-  Map, Sparkles, Users, Star, TrendingUp,
-  Calendar, Globe, ArrowRight, Plus, Bell,
-  MapPin, Clock, Wallet, ChevronRight, MoreHorizontal,
-  Loader2, Plane
-} from "lucide-react"
-import { Button } from "../components/ui/button"
-import { Badge } from "../components/ui/badge"
-import { Avatar, AvatarFallback } from "../components/ui/avatar"
-import { Progress } from "../components/ui/progress"
-import { cn } from "@/lib/utils"
-import { useState, useEffect } from "react"
-import { getTrips, getSavedTrips, getSession } from "../lib/supabase"
-import { supabase } from "../lib/supabase"
-import type { Trip, SavedTrip } from "../lib/supabase"
+  Map,
+  Sparkles,
+  Users,
+  Star,
+  TrendingUp,
+  Calendar,
+  Globe,
+  ArrowRight,
+  Plus,
+  Bell,
+  MapPin,
+  Clock,
+  Wallet,
+  ChevronRight,
+  MoreHorizontal,
+  Loader2,
+  Plane,
+} from "lucide-react";
+import { Button } from "../components/ui/button";
+import { Badge } from "../components/ui/badge";
+import { Avatar, AvatarFallback } from "../components/ui/avatar";
+import { Progress } from "../components/ui/progress";
+import { cn } from "@/lib/utils";
+import { useState, useEffect, useMemo } from "react";
+import { useDestinationImages } from "../lib/useDestinationImages";
+import { getTrips, getSavedTrips, getSession } from "../lib/supabase";
+import { supabase } from "../lib/supabase";
+import type { Trip, SavedTrip } from "../lib/supabase";
 
-type Page = "landing" | "login" | "register" | "home" | "editor" | "ai" | "splitbill" | "explore" | "profile" | "achievements" | "bucketlist" | "settings" | "notifications" | "trips"
+type Page =
+  | "landing"
+  | "login"
+  | "register"
+  | "home"
+  | "editor"
+  | "ai"
+  | "splitbill"
+  | "explore"
+  | "profile"
+  | "achievements"
+  | "bucketlist"
+  | "settings"
+  | "notifications"
+  | "trips";
 
 interface DashboardProps {
-  navigateTo: (page: Page) => void
-  onLogout: () => void
-  user: any
+  navigateTo: (page: Page) => void;
+  onLogout: () => void;
+  user: any;
 }
 
 // ─── Fetcher hooks ─────────────────────────────────────────
 
 interface NotificationItem {
-  id: string
-  type: string
-  title: string
-  body: string | null
-  link: string | null
-  read: boolean
-  created_at: string
-  timeAgo: string
+  id: string;
+  type: string;
+  title: string;
+  body: string | null;
+  link: string | null;
+  read: boolean;
+  created_at: string;
+  timeAgo: string;
 }
 
 interface ReminderItem {
-  id?: string
-  title: string
-  date: string
-  type: "reminder" | "payment" | "social" | "upcoming"
+  id?: string;
+  title: string;
+  date: string;
+  type: "reminder" | "payment" | "social" | "upcoming";
 }
 
 function useDashboardData() {
-  const [trips, setTrips] = useState<Trip[]>([])
-  const [notifications, setNotifications] = useState<NotificationItem[]>([])
-  const [reminders, setReminders] = useState<ReminderItem[]>([])
-  const [bucketList, setBucketList] = useState<SavedTrip[]>([])
-  const [unreadCount, setUnreadCount] = useState(0)
-  const [loading, setLoading] = useState(true)
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [reminders, setReminders] = useState<ReminderItem[]>([]);
+  const [bucketList, setBucketList] = useState<SavedTrip[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
       // Load trips (always needed for stats + reminders)
-      let userTrips: Trip[] = []
+      let userTrips: Trip[] = [];
       try {
-        userTrips = await getTrips()
-        setTrips(userTrips)
+        userTrips = await getTrips();
+        setTrips(userTrips);
       } catch {
-        setTrips([])
+        setTrips([]);
       }
 
       // Build upcoming reminders from real trips
-      const upcomingReminders: ReminderItem[] = []
-      const now = new Date()
+      const upcomingReminders: ReminderItem[] = [];
+      const now = new Date();
       for (const t of userTrips) {
         if (t.start_date) {
-          const start = new Date(t.start_date + "T00:00:00")
-          const diff = Math.ceil((start.getTime() - now.getTime()) / 86400000)
+          const start = new Date(t.start_date + "T00:00:00");
+          const diff = Math.ceil((start.getTime() - now.getTime()) / 86400000);
           if (diff >= 0 && diff <= 30) {
             upcomingReminders.push({
               title: `Mulai trip: ${t.name}`,
-              date: new Date(start).toLocaleDateString("id-ID", { day: "2-digit", month: "short" }),
+              date: new Date(start).toLocaleDateString("id-ID", {
+                day: "2-digit",
+                month: "short",
+              }),
               type: "upcoming",
-            })
+            });
           }
         }
       }
@@ -85,15 +116,15 @@ function useDashboardData() {
           title: "Buat trip pertamamu!",
           date: "Segera",
           type: "reminder",
-        })
+        });
       }
-      setReminders(upcomingReminders)
+      setReminders(upcomingReminders);
 
       // Load notifications + bucket list from Supabase
       if (supabase) {
         try {
-          const session = await getSession()
-          const userId = session?.user?.id
+          const session = await getSession();
+          const userId = session?.user?.id;
 
           if (userId) {
             // Fetch notifications
@@ -102,65 +133,75 @@ function useDashboardData() {
               .select("id, type, title, body, action_url, read, created_at")
               .eq("user_id", userId)
               .order("created_at", { ascending: false })
-              .limit(5)
+              .limit(5);
 
             if (notifData && notifData.length > 0) {
-              setNotifications(notifData.map((n: any) => ({
-                ...n,
-                timeAgo: formatTimeAgo(n.created_at),
-              })))
-              setUnreadCount(notifData.filter((n: any) => !n.read).length)
+              setNotifications(
+                notifData.map((n: any) => ({
+                  ...n,
+                  timeAgo: formatTimeAgo(n.created_at),
+                })),
+              );
+              setUnreadCount(notifData.filter((n: any) => !n.read).length);
             } else {
-              setNotifications([])
+              setNotifications([]);
             }
 
             // Fetch saved trips (Disimpan from Explorer)
             try {
-              const savedData = await getSavedTrips()
-              setBucketList(savedData.slice(0, 5))
+              const savedData = await getSavedTrips();
+              setBucketList(savedData.slice(0, 5));
             } catch {
-              setBucketList([])
+              setBucketList([]);
             }
           } else {
-            setNotifications([])
-            setBucketList([])
+            setNotifications([]);
+            setBucketList([]);
           }
         } catch {
-          setNotifications([])
-          setBucketList([])
+          setNotifications([]);
+          setBucketList([]);
         }
       }
 
-      setLoading(false)
+      setLoading(false);
     }
 
-    load()
-  }, [])
+    load();
+  }, []);
 
-  return { trips, notifications, reminders, bucketList, unreadCount, loading }
+  return { trips, notifications, reminders, bucketList, unreadCount, loading };
 }
 
 // ─── Helpers ───────────────────────────────────────────────
 
 function formatTimeAgo(dateStr: string): string {
-  const now = new Date()
-  const date = new Date(dateStr)
-  const diff = Math.floor((now.getTime() - date.getTime()) / 1000)
-  if (diff < 60) return "Baru saja"
-  if (diff < 3600) return `${Math.floor(diff / 60)} menit lalu`
-  if (diff < 86400) return `${Math.floor(diff / 3600)} jam lalu`
-  return `${Math.floor(diff / 86400)} hari lalu`
+  const now = new Date();
+  const date = new Date(dateStr);
+  const diff = Math.floor((now.getTime() - date.getTime()) / 1000);
+  if (diff < 60) return "Baru saja";
+  if (diff < 3600) return `${Math.floor(diff / 60)} menit lalu`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} jam lalu`;
+  return `${Math.floor(diff / 86400)} hari lalu`;
 }
 
 // ─── Main Component ────────────────────────────────────────
 
 export function Dashboard({ navigateTo, onLogout, user }: DashboardProps) {
-  const [searchQuery] = useState("")
-  const { trips, notifications, reminders, bucketList, unreadCount, loading } = useDashboardData()
+  const [searchQuery] = useState("");
+  const { trips, notifications, reminders, bucketList, unreadCount, loading } =
+    useDashboardData();
+
+  // Image resolution for trip cards
+  const destinationList = useMemo(
+    () => trips.map((t) => t.destination).filter(Boolean),
+    [trips],
+  );
+  const destinationImages = useDestinationImages(destinationList);
 
   // Derive stats from real data
-  const completedTrips = trips.filter(t => t.status === "completed").length
-  const countriesVisited = new Set(trips.map(t => t.destination)).size
+  const completedTrips = trips.filter((t) => t.status === "completed").length;
+  const countriesVisited = new Set(trips.map((t) => t.destination)).size;
 
   // Build display trips from real data
   const displayTrips = trips.slice(0, 4).map((t, i) => ({
@@ -168,19 +209,21 @@ export function Dashboard({ navigateTo, onLogout, user }: DashboardProps) {
     name: t.name,
     destination: t.destination,
     date: t.start_date
-      ? new Date(t.start_date + "T00:00:00").toLocaleDateString("id-ID", { day: "2-digit", month: "short" })
+      ? new Date(t.start_date + "T00:00:00").toLocaleDateString("id-ID", {
+          day: "2-digit",
+          month: "short",
+        })
       : "TBD",
     progress: t.status === "completed" ? 100 : t.status === "active" ? 60 : 20,
     people: 1,
     emoji: ["🏖️", "🏔️", "✈️", "🌸", "🏙️"][i % 5],
     status: t.status,
     shared: false,
-  }))
+  }));
 
   return (
     <div className="pt-16 min-h-screen">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-
         {/* Welcome Section */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -188,22 +231,33 @@ export function Dashboard({ navigateTo, onLogout, user }: DashboardProps) {
           className="mb-8"
         >
           <h1 className="text-3xl font-black mb-2 text-foreground">
-            Selamat datang, <span className="gradient-text">{user?.name || "Traveler"}</span>! 👋
+            Selamat datang,{" "}
+            <span className="gradient-text">{user?.name || "Traveler"}</span>!
+            👋
           </h1>
           <p className="text-muted-foreground">
-            {loading ? "Memuat..." :
-              trips.length > 0
-                ? <>Kamu punya <span className="font-bold text-[var(--aurora-start)]">{trips.length} trip</span> — {completedTrips} sudah selesai. {upcomingTripCount(trips) > 0 ? `(${upcomingTripCount(trips)} trip akan datang)` : ""}</>
-                : <>Buat trip pertamamu dan mulai jelajahi dunia!</>
-            }
+            {loading ? (
+              "Memuat..."
+            ) : trips.length > 0 ? (
+              <>
+                Kamu punya{" "}
+                <span className="font-bold text-[var(--aurora-start)]">
+                  {trips.length} trip
+                </span>{" "}
+                — {completedTrips} sudah selesai.{" "}
+                {upcomingTripCount(trips) > 0
+                  ? `(${upcomingTripCount(trips)} trip akan datang)`
+                  : ""}
+              </>
+            ) : (
+              <>Buat trip pertamamu dan mulai jelajahi dunia!</>
+            )}
           </p>
         </motion.div>
 
         <div className="grid lg:grid-cols-3 gap-8">
-
           {/* ── Main Content ── */}
           <div className="lg:col-span-2 space-y-6">
-
             {/* Active Trips */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -215,7 +269,15 @@ export function Dashboard({ navigateTo, onLogout, user }: DashboardProps) {
                   <Map className="w-5 h-5 text-[var(--aurora-start)]" />
                   Trip {trips.length > 0 ? `(${trips.length})` : "Aktif"}
                 </h2>
-                <Button variant="ghost" size="sm" onClick={() => trips.length > 0 ? navigateTo("trips") : navigateTo("editor")}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    trips.length > 0
+                      ? navigateTo("trips")
+                      : navigateTo("editor")
+                  }
+                >
                   {trips.length > 0 ? "Lihat Semua" : "Buat Baru"}
                   <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
@@ -254,7 +316,10 @@ export function Dashboard({ navigateTo, onLogout, user }: DashboardProps) {
                         </div>
                         <button
                           className="p-1 rounded hover:bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={(e) => { e.stopPropagation(); navigateTo("trips") }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigateTo("trips");
+                          }}
                           title="Lihat semua trip"
                         >
                           <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
@@ -263,7 +328,9 @@ export function Dashboard({ navigateTo, onLogout, user }: DashboardProps) {
 
                       <div className="space-y-2">
                         <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Progress</span>
+                          <span className="text-muted-foreground">
+                            Progress
+                          </span>
                           <span className="font-medium">{trip.progress}%</span>
                         </div>
                         <Progress value={trip.progress} className="h-2" />
@@ -277,7 +344,9 @@ export function Dashboard({ navigateTo, onLogout, user }: DashboardProps) {
                               Aktif
                             </span>
                           ) : trip.status === "completed" ? (
-                            <span className="flex items-center gap-1 text-blue-500">Selesai</span>
+                            <span className="flex items-center gap-1 text-blue-500">
+                              Selesai
+                            </span>
                           ) : (
                             <span className="text-amber-500">Planning</span>
                           )}
@@ -296,7 +365,10 @@ export function Dashboard({ navigateTo, onLogout, user }: DashboardProps) {
                   <p className="text-muted-foreground text-sm mb-6">
                     Mulai rencanakan trip pertamamu dengan bantuan AI!
                   </p>
-                  <Button variant="gradient" onClick={() => navigateTo("editor")}>
+                  <Button
+                    variant="gradient"
+                    onClick={() => navigateTo("editor")}
+                  >
                     <Sparkles className="w-4 h-4 mr-2" />
                     Buat Trip Baru
                   </Button>
@@ -333,10 +405,30 @@ export function Dashboard({ navigateTo, onLogout, user }: DashboardProps) {
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
-                  { icon: Sparkles, label: "AI Generator", color: "from-violet-400 to-purple-500", page: "ai" as Page },
-                  { icon: Globe, label: "Explore", color: "from-pink-400 to-rose-500", page: "explore" as Page },
-                  { icon: Wallet, label: "Split Bill", color: "from-amber-400 to-orange-500", page: "splitbill" as Page },
-                  { icon: Star, label: "Achievements", color: "from-amber-400 to-yellow-500", page: "achievements" as Page },
+                  {
+                    icon: Sparkles,
+                    label: "AI Generator",
+                    color: "from-violet-400 to-purple-500",
+                    page: "ai" as Page,
+                  },
+                  {
+                    icon: Globe,
+                    label: "Explore",
+                    color: "from-pink-400 to-rose-500",
+                    page: "explore" as Page,
+                  },
+                  {
+                    icon: Wallet,
+                    label: "Split Bill",
+                    color: "from-amber-400 to-orange-500",
+                    page: "splitbill" as Page,
+                  },
+                  {
+                    icon: Star,
+                    label: "Achievements",
+                    color: "from-amber-400 to-yellow-500",
+                    page: "achievements" as Page,
+                  },
                 ].map((action, i) => (
                   <motion.button
                     key={i}
@@ -346,7 +438,9 @@ export function Dashboard({ navigateTo, onLogout, user }: DashboardProps) {
                     onClick={() => navigateTo(action.page)}
                     className="bg-white border border-border rounded-2xl p-4 flex flex-col items-center gap-2 cursor-pointer hover:border-[var(--aurora-start)]/30 hover:shadow-md transition-all duration-300"
                   >
-                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${action.color} flex items-center justify-center shadow-lg`}>
+                    <div
+                      className={`w-10 h-10 rounded-xl bg-gradient-to-br ${action.color} flex items-center justify-center shadow-lg`}
+                    >
                       <action.icon className="w-5 h-5 text-white" />
                     </div>
                     <span className="text-sm font-medium">{action.label}</span>
@@ -367,7 +461,11 @@ export function Dashboard({ navigateTo, onLogout, user }: DashboardProps) {
                     <Globe className="w-5 h-5 text-emerald-500" />
                     Trip Kamu
                   </h2>
-                  <Button variant="ghost" size="sm" onClick={() => navigateTo("trips")}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => navigateTo("trips")}
+                  >
                     Lihat Semua
                     <ChevronRight className="w-4 h-4 ml-1" />
                   </Button>
@@ -383,21 +481,41 @@ export function Dashboard({ navigateTo, onLogout, user }: DashboardProps) {
                       className="bg-white border border-border rounded-2xl p-4 cursor-pointer hover:border-[var(--aurora-start)]/30 hover:shadow-md transition-all duration-300"
                       onClick={() => navigateTo("editor")}
                     >
-                      <div className={`aspect-video rounded-xl bg-gradient-to-br ${["from-rose-400 via-purple-500 to-indigo-600", "from-emerald-400 via-teal-500 to-blue-500", "from-pink-400 via-rose-500 to-red-500", "from-amber-400 via-orange-500 to-red-600"][i % 4]} relative overflow-hidden mb-3`}>
+                      <div
+                        className={`aspect-video rounded-xl bg-gradient-to-br ${["from-rose-400 via-purple-500 to-indigo-600", "from-emerald-400 via-teal-500 to-blue-500", "from-pink-400 via-rose-500 to-red-500", "from-amber-400 via-orange-500 to-red-600"][i % 4]} relative overflow-hidden mb-3`}
+                      >
+                        {destinationImages[trip.destination] && (
+                          <img
+                            src={destinationImages[trip.destination]}
+                            alt={trip.destination}
+                            className="absolute inset-0 w-full h-full object-cover"
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none";
+                            }}
+                          />
+                        )}
                         <div className="absolute inset-0 bg-black/10" />
                         <div className="absolute bottom-3 left-3 flex gap-2">
-                          <span className="glass-card px-2 py-1 text-xs text-white flex items-center gap-1">
+                          <span className="bg-black/50 backdrop-blur-sm px-2 py-1 text-xs text-white rounded-lg border border-white/20 flex items-center gap-1">
                             <MapPin className="w-3 h-3" />
                             {trip.destination}
                           </span>
-                          <span className="glass-card px-2 py-1 text-xs text-white capitalize">{trip.status}</span>
+                          <span className="bg-black/50 backdrop-blur-sm px-2 py-1 text-xs text-white capitalize rounded-lg border border-white/20">
+                            {trip.status}
+                          </span>
                         </div>
                       </div>
                       <h3 className="font-bold">{trip.name}</h3>
                       {trip.start_date && (
                         <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
                           <Calendar className="w-3 h-3" />
-                          {new Date(trip.start_date + "T00:00:00").toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" })}
+                          {new Date(
+                            trip.start_date + "T00:00:00",
+                          ).toLocaleDateString("id-ID", {
+                            day: "2-digit",
+                            month: "long",
+                            year: "numeric",
+                          })}
                         </p>
                       )}
                     </motion.div>
@@ -409,7 +527,6 @@ export function Dashboard({ navigateTo, onLogout, user }: DashboardProps) {
 
           {/* ── Sidebar ── */}
           <div className="space-y-6">
-
             {/* Quick Stats */}
             <motion.div
               initial={{ opacity: 0, x: 20 }}
@@ -423,14 +540,34 @@ export function Dashboard({ navigateTo, onLogout, user }: DashboardProps) {
               </h3>
               <div className="grid grid-cols-2 gap-4">
                 {[
-                  { value: String(countriesVisited || 0), label: "Kota Dikunjungi", color: "text-blue-500" },
-                  { value: String(completedTrips || 0), label: "Trip Selesai", color: "text-emerald-500" },
-                  { value: String(trips.length || 0), label: "Total Trip", color: "text-violet-500" },
-                  { value: String(unreadCount || 0), label: "Notifikasi Baru", color: "text-red-500" },
+                  {
+                    value: String(countriesVisited || 0),
+                    label: "Kota Dikunjungi",
+                    color: "text-blue-500",
+                  },
+                  {
+                    value: String(completedTrips || 0),
+                    label: "Trip Selesai",
+                    color: "text-emerald-500",
+                  },
+                  {
+                    value: String(trips.length || 0),
+                    label: "Total Trip",
+                    color: "text-violet-500",
+                  },
+                  {
+                    value: String(unreadCount || 0),
+                    label: "Notifikasi Baru",
+                    color: "text-red-500",
+                  },
                 ].map((stat, i) => (
                   <div key={i} className="text-center">
-                    <div className={`text-2xl font-black ${stat.color}`}>{loading ? "—" : stat.value}</div>
-                    <div className="text-xs text-muted-foreground">{stat.label}</div>
+                    <div className={`text-2xl font-black ${stat.color}`}>
+                      {loading ? "—" : stat.value}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {stat.label}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -457,24 +594,44 @@ export function Dashboard({ navigateTo, onLogout, user }: DashboardProps) {
                   {notifications.map((n) => (
                     <div key={n.id} className="flex items-start gap-3 text-sm">
                       <Avatar className="w-8 h-8 shrink-0">
-                        <AvatarFallback className={`text-xs bg-gradient-to-br ${n.type === "ai" ? "from-violet-400 to-purple-500" : n.type === "badge" ? "from-amber-400 to-orange-500" : "from-[var(--aurora-start)] to-[var(--aurora-end)]"}`}>
-                          {n.type === "ai" ? "AI" : n.type === "badge" ? "🏆" : "🔔"}
+                        <AvatarFallback
+                          className={`text-xs bg-gradient-to-br ${n.type === "ai" ? "from-violet-400 to-purple-500" : n.type === "badge" ? "from-amber-400 to-orange-500" : "from-[var(--aurora-start)] to-[var(--aurora-end)]"}`}
+                        >
+                          {n.type === "ai"
+                            ? "AI"
+                            : n.type === "badge"
+                              ? "🏆"
+                              : "🔔"}
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm leading-snug">{n.title}</p>
-                        {n.body && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.body}</p>}
-                        <p className="text-xs text-muted-foreground mt-1">{n.timeAgo}</p>
+                        <p className="font-medium text-sm leading-snug">
+                          {n.title}
+                        </p>
+                        {n.body && (
+                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                            {n.body}
+                          </p>
+                        )}
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {n.timeAgo}
+                        </p>
                       </div>
-                      {!n.read && <span className="w-2 h-2 rounded-full bg-[var(--aurora-start)] shrink-0 mt-1.5" />}
+                      {!n.read && (
+                        <span className="w-2 h-2 rounded-full bg-[var(--aurora-start)] shrink-0 mt-1.5" />
+                      )}
                     </div>
                   ))}
                 </div>
               ) : (
                 /* Empty state */
                 <div className="text-center py-4">
-                  <p className="text-sm text-muted-foreground">Belum ada aktivitas</p>
-                  <p className="text-xs text-muted-foreground mt-1">Aktivitas akan muncul saat kamu membuat trip</p>
+                  <p className="text-sm text-muted-foreground">
+                    Belum ada aktivitas
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Aktivitas akan muncul saat kamu membuat trip
+                  </p>
                 </div>
               )}
             </motion.div>
@@ -491,27 +648,48 @@ export function Dashboard({ navigateTo, onLogout, user }: DashboardProps) {
                 Pengingat
               </h3>
               <div className="space-y-3">
-                {reminders.length > 0 ? reminders.map((r, i) => (
-                  <div key={i} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/30 transition-colors">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                      r.type === "payment" ? "bg-amber-500/20 text-amber-500" :
-                      r.type === "social" ? "bg-pink-500/20 text-pink-500" :
-                      r.type === "upcoming" ? "bg-blue-500/20 text-blue-500" :
-                      "bg-[var(--aurora-start)]/10 text-[var(--aurora-start)]"
-                    }`}>
-                      {r.type === "payment" ? <Wallet className="w-4 h-4" /> :
-                       r.type === "social" ? <Users className="w-4 h-4" /> :
-                       r.type === "upcoming" ? <Calendar className="w-4 h-4" /> :
-                       <Clock className="w-4 h-4" />}
+                {reminders.length > 0 ? (
+                  reminders.map((r, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/30 transition-colors"
+                    >
+                      <div
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                          r.type === "payment"
+                            ? "bg-amber-500/20 text-amber-500"
+                            : r.type === "social"
+                              ? "bg-pink-500/20 text-pink-500"
+                              : r.type === "upcoming"
+                                ? "bg-blue-500/20 text-blue-500"
+                                : "bg-[var(--aurora-start)]/10 text-[var(--aurora-start)]"
+                        }`}
+                      >
+                        {r.type === "payment" ? (
+                          <Wallet className="w-4 h-4" />
+                        ) : r.type === "social" ? (
+                          <Users className="w-4 h-4" />
+                        ) : r.type === "upcoming" ? (
+                          <Calendar className="w-4 h-4" />
+                        ) : (
+                          <Clock className="w-4 h-4" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium leading-snug">
+                          {r.title}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {r.date}
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium leading-snug">{r.title}</p>
-                      <p className="text-xs text-muted-foreground">{r.date}</p>
-                    </div>
-                  </div>
-                )) : (
+                  ))
+                ) : (
                   <div className="text-center py-4">
-                    <p className="text-sm text-muted-foreground">Tidak ada pengingat</p>
+                    <p className="text-sm text-muted-foreground">
+                      Tidak ada pengingat
+                    </p>
                   </div>
                 )}
               </div>
@@ -529,7 +707,11 @@ export function Dashboard({ navigateTo, onLogout, user }: DashboardProps) {
                   <MapPin className="w-4 h-4 text-rose-400" />
                   Trip Disimpan
                 </h3>
-                <Button variant="ghost" size="sm" onClick={() => navigateTo("bucketlist")}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigateTo("bucketlist")}
+                >
                   Lihat Semua
                 </Button>
               </div>
@@ -540,40 +722,53 @@ export function Dashboard({ navigateTo, onLogout, user }: DashboardProps) {
               ) : bucketList.length > 0 ? (
                 <div className="space-y-2">
                   {bucketList.map((item, i) => (
-                    <div key={item.id} className="flex items-center gap-2 text-sm">
+                    <div
+                      key={item.id}
+                      className="flex items-center gap-2 text-sm"
+                    >
                       <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] text-white shrink-0 bg-gradient-to-br from-[var(--aurora-start)] to-[var(--aurora-end)]">
                         {i + 1}
                       </span>
                       <div className="flex-1 min-w-0">
-                        <span className="font-medium truncate block">{item.name}</span>
-                        <span className="text-xs text-muted-foreground truncate block">{item.destination} · {item.days} hari</span>
+                        <span className="font-medium truncate block">
+                          {item.name}
+                        </span>
+                        <span className="text-xs text-muted-foreground truncate block">
+                          {item.destination} · {item.days} hari
+                        </span>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
                 <div className="text-center py-2">
-                  <p className="text-sm text-muted-foreground">Belum ada trip yang disimpan</p>
-                  <Button variant="ghost" size="sm" className="mt-2" onClick={() => navigateTo("explore")}>
+                  <p className="text-sm text-muted-foreground">
+                    Belum ada trip yang disimpan
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => navigateTo("explore")}
+                  >
                     Jelajahi Trip
                   </Button>
                 </div>
               )}
             </motion.div>
-
           </div>
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 // ─── Helpers ───────────────────────────────────────────────
 
 function upcomingTripCount(trips: Trip[]): number {
-  const now = new Date()
-  return trips.filter(t => {
-    if (!t.start_date) return false
-    return new Date(t.start_date + "T00:00:00") > now
-  }).length
+  const now = new Date();
+  return trips.filter((t) => {
+    if (!t.start_date) return false;
+    return new Date(t.start_date + "T00:00:00") > now;
+  }).length;
 }

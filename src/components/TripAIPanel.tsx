@@ -21,7 +21,7 @@ interface TripAIPanelProps {
   itineraryItems: ItineraryItem[]
   onItemsChanged: () => void
   currentDay?: number
-  onRequestAdd?: (prefill: { name: string; day: number; time: string; location?: string; category?: string; notes?: string }) => void
+  onRequestAdd?: (prefill: { name: string; day: number; time: string; location?: string; category?: string; notes?: string; latitude?: number | null; longitude?: number | null }) => void
 }
 
 interface ChatBubble {
@@ -407,10 +407,14 @@ export function TripAIPanel({
               location: action.item.location,
               category: action.item.category,
               notes: action.item.notes,
+              latitude: action.item.latitude ?? null,
+              longitude: action.item.longitude ?? null,
             })
             pendingAdds++
           } else {
-            // Fallback: auto-apply directly
+            // Fallback: auto-apply directly — map AI category → DB value
+            const aiCat = (action.item.category || 'activity').toLowerCase()
+            const dbCat = { hotel: 'accommodation', accommodation: 'accommodation', landmark: 'attraction', nature: 'attraction', activity: 'attraction', shopping: 'attraction', food: 'food', transport: 'transport' }[aiCat] ?? 'attraction'
             await addItineraryItem({
               trip_id: trip.id,
               day: action.item.day || 1,
@@ -419,7 +423,7 @@ export function TripAIPanel({
               location: action.item.location,
               latitude: action.item.latitude || null,
               longitude: action.item.longitude || null,
-              category: action.item.category || 'activity',
+              category: dbCat as any,
               duration_minutes: action.item.duration_minutes || 60,
               notes: action.item.notes,
               sort_order: 999,

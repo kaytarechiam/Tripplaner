@@ -1,18 +1,8 @@
-// Detect if running on localhost vs remote tunnel
-const isLocalDev = (
-  typeof window !== 'undefined' &&
-  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-)
-
-// VITE_API_BASE:
-//   - dev (npm run dev:client): empty → Vite proxy /api → localhost:3001
-//   - tunnel/production: MUST be set to your backend URL
+// Always use relative URLs → Vite proxy forwards /api → localhost:3001
+// This works for localhost, HTTPS tunnel (stei.cloud), and production.
+// Set VITE_API_BASE only if you need to point to an EXTERNAL backend.
 const rawBase = import.meta.env.VITE_API_BASE as string | undefined
-const API_BASE = rawBase
-  ? rawBase
-  : isLocalDev
-    ? ''   // use Vite proxy in dev
-    : 'http://localhost:3000' // fallback: direct to backend (production/tunnel)
+const API_BASE = rawBase || ''   // '' = use Vite proxy (/api → localhost:3001)
 
 export async function apiFetch<T = unknown>(
   endpoint: string,
@@ -169,7 +159,7 @@ const BUDGET_LABEL_TO_ENUM: Record<string, string> = {
 export async function generateItinerary(
   payload: GenerateItineraryPayload
 ): Promise<GenerateItineraryResponse> {
-  // Map preferences array → trip_type (take first selected preference as dominant type)
+  // Map preferences array → trip_type
   const tripType = payload.preferences?.[0]
     ? PREFERENCE_TO_TRIPTYPE[payload.preferences[0]] || 'mixed'
     : undefined
@@ -179,24 +169,70 @@ export async function generateItinerary(
     ? (BUDGET_LABEL_TO_ENUM[payload.budget] as 'budget' | 'moderate' | 'luxury' | undefined)
     : undefined
 
-  // Map preferences array → comma-separated string for AI prompt
+  // Map preferences array → comma-separated string
   const preferencesStr = payload.preferences?.join(', ') || payload.preferences_raw
 
-  return apiFetch<GenerateItineraryResponse>('/api/ai/generate-itinerary', {
-    method: 'POST',
-    body: JSON.stringify({
-      destination: payload.destination,
-      days: payload.days,
-      trip_type: tripType,
-      budget: budgetEnum,
-      travelers: payload.travelers,
-      start_date: payload.start_date,
-      preferences: preferencesStr,
-      custom_message: payload.customMessage,
-      min_budget: payload.minBudget,
-      max_budget: payload.maxBudget,
-    }),
+  // Build auth header
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  try {
+    const { getSession } = await import('./supabase')
+    const session = await getSession()
+    if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`
+  } catch { /* ignore */ }
+
+  const body = JSON.stringify({
+    destination: payload.destination,
+    days: payload.days,
+    trip_type: tripType,
+    budget: budgetEnum,
+    travelers: payload.travelers,
+    start_date: payload.start_date,
+    preferences: preferencesStr,
+    custom_message: payload.customMessage,
+    min_budget: payload.minBudget,
+    max_budget: payload.maxBudget,
   })
+
+  // The backend responds with SSE (text/event-stream) to avoid Cloudflare 524 timeout.
+  // We read the stream and return the first "data:" payload as the final result.
+  const res = await fetch(`${API_BASE}/api/ai/generate-itinerary`, {
+    method: 'POST',
+    headers,
+    body,
+  })
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: res.statusText }))
+    throw new Error((err as any).message || `HTTP ${res.status}`)
+  }
+
+  // Read the full response body as text first.
+  // The backend sends SSE (": ping\n\n" heartbeats + "data: {...}\n\n" result).
+  // Vite proxy may strip Content-Type, so we detect format by content, not header.
+  const rawText = await res.text()
+
+  // ── SSE format: find the last "data: " line ──
+  if (rawText.includes('\ndata: ') || rawText.startsWith('data: ') || rawText.startsWith(': ')) {
+    const lines = rawText.split('\n')
+    let lastData: string | null = null
+    let isError = false
+
+    for (const line of lines) {
+      if (line.startsWith('event: error')) { isError = true; continue }
+      if (line.startsWith('data: ')) {
+        lastData = line.slice(6).trim()
+      }
+    }
+
+    if (!lastData) throw new Error('AI response incomplete — coba lagi')
+
+    const data = JSON.parse(lastData) as any
+    if (isError || (data.message && !data.itinerary)) throw new Error(data.message || 'AI error')
+    return data as GenerateItineraryResponse
+  }
+
+  // ── Plain JSON fallback ──
+  return JSON.parse(rawText) as GenerateItineraryResponse
 }
 
 // ─── Weather API ───────────────────────────────────────

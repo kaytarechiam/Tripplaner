@@ -1,6 +1,7 @@
+// ⚠️  env.ts MUST be first — loads dotenv before any service module initializes
+import './env.js'
 import express from 'express'
 import cors from 'cors'
-import dotenv from 'dotenv'
 import path from 'path'
 import { fileURLToPath } from 'url'
 
@@ -19,10 +20,6 @@ import { checkSupabase } from './services/supabase.js'
 import { checkClaude } from './services/claude.js'
 import { checkGemini } from './services/gemini.js'
 import { checkOpenAI } from './services/openai.js'
-
-// Load root .env first, then server/.env (server/.env takes precedence)
-dotenv.config({ path: path.resolve(__dirname, '../.env') })
-dotenv.config({ path: path.resolve(__dirname, '.env'), override: true })
 
 const app = express()
 const PORT = process.env.PORT || 3000

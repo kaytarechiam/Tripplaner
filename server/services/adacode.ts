@@ -43,31 +43,49 @@ export async function checkAdaCode(): Promise<boolean> {
 }
 
 // ─── Shared helper ───────────────────────────────────────────
+// SSE heartbeats keep Cloudflare alive, so we can wait up to 3 minutes
+const REQUEST_TIMEOUT_MS = 180_000
+
 async function chatComplete(
   client: OpenAI,
   messages: { role: 'user' | 'system' | 'assistant'; content: string }[],
-  maxTokens = 4096,
+  maxTokens = 2048,
+  retries = 1,
 ): Promise<string> {
-  // Try primary model first, fall back to secondary on quota/rate errors
+  // Try primary model first, fall back to secondary on quota/rate/server errors
   for (const model of [PRIMARY_MODEL, FALLBACK_MODEL]) {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
     try {
-      const resp = await client.chat.completions.create({
-        model,
-        messages,
-        max_tokens: maxTokens,
-        temperature: 0.7,
-      })
+      const resp = await client.chat.completions.create(
+        { model, messages, max_tokens: maxTokens, temperature: 0 },
+        { signal: controller.signal as any },
+      )
+      clearTimeout(timer)
       const text = resp.choices[0]?.message?.content || ''
       if (text) {
         console.log(`[AdaCode] Responded via model: ${model}`)
         return text
       }
     } catch (err: any) {
+      clearTimeout(timer)
       const msg: string = err?.message || String(err)
-      const isQuota = msg.includes('429') || msg.includes('quota') || msg.includes('rate')
+      const isAbort  = err?.name === 'AbortError' || msg.includes('abort') || msg.includes('signal')
+      const isQuota  = msg.includes('429') || msg.includes('quota') || msg.includes('rate limit')
+      const isServer = msg.includes('500') || msg.includes('503') || msg.includes('canceled') || msg.includes('timeout')
+
+      if (isAbort) {
+        console.warn(`[AdaCode] ${model} timed out after ${REQUEST_TIMEOUT_MS / 1000}s`)
+        throw new Error('AI request timed out — please try again')
+      }
       if (isQuota && model === PRIMARY_MODEL) {
         console.warn(`[AdaCode] ${model} quota hit, trying ${FALLBACK_MODEL}...`)
         continue
+      }
+      if (isServer && retries > 0) {
+        console.warn(`[AdaCode] ${model} server error (${msg.slice(0, 40)}), retrying in 2s...`)
+        await new Promise(r => setTimeout(r, 2000))
+        return chatComplete(client, messages, maxTokens, retries - 1)
       }
       throw err
     }
@@ -104,36 +122,43 @@ export async function generateItineraryAdaCode(params: ItineraryParams): Promise
   const client = getAdaCode()
   if (!client) throw new Error('AdaCode API not configured — set ADACODE_API_KEY in .env')
 
-  const prompt = `You are a professional travel planner AI specializing in Indonesian and Southeast Asian travel.
-Generate a ${params.days}-day detailed itinerary for ${params.destination}\
-${params.trip_type ? ` (trip type: ${params.trip_type})` : ''}\
-${params.budget ? ` with a ${params.budget} budget` : ''}\
-${params.travelers ? ` for ${params.travelers} traveler(s)` : ''}\
-${params.start_date ? ` starting from ${params.start_date}` : ''}\
-${params.preferences ? `. Special preferences: ${params.preferences}` : ''}.
+  const budgetRangeStr = params.min_budget && params.max_budget
+    ? `\nBudget range per hari: Rp ${params.min_budget.toLocaleString('id-ID')} – Rp ${params.max_budget.toLocaleString('id-ID')}.`
+    : ''
+  const customNoteStr = params.custom_message
+    ? `\nCatatan khusus dari user (wajib dipertimbangkan): ${params.custom_message}`
+    : ''
 
-For each day provide 4-6 activities. Each activity must have:
-- time (HH:MM 24-hour format)
-- title (specific place/activity name)
-- description (1-2 sentences, why it's worth visiting)
-- location (full specific address or area)
-- latitude & longitude (accurate coordinates — IMPORTANT)
-- category: one of hotel/landmark/food/nature/activity/shopping/transport
-- duration_minutes (realistic)
-- estimated_cost (in local currency, e.g. "Rp 50.000" or "Free")
-- tips (one practical tip)
+  const prompt = `Generate a ${params.days}-day travel itinerary for ${params.destination}.\
+${params.trip_type ? ` Style: ${params.trip_type}.` : ''}\
+${params.travelers ? ` Travelers: ${params.travelers}.` : ''}\
+${params.start_date ? ` Start: ${params.start_date}.` : ''}\
+${params.preferences ? ` Preferences: ${params.preferences}.` : ''}${budgetRangeStr}${customNoteStr}
 
-Return ONLY valid JSON — no markdown, no code fences, no explanation:
-{"itinerary":[{"day":1,"date":"YYYY-MM-DD","items":[{"time":"09:00","title":"Place Name","description":"Why visit","location":"Specific address","latitude":-8.409518,"longitude":115.188919,"category":"landmark","duration_minutes":120,"estimated_cost":"Rp 50.000","tips":"Practical tip"}]}],"summary":"2-3 sentence trip overview","total_estimated_budget":"Rp X.XXX.XXX per person","best_season":"Best months to visit"}`
+Rules: exactly 3 activities per day. No markdown, no explanation. Return ONLY valid JSON:
+{"itinerary":[{"day":1,"date":"YYYY-MM-DD","items":[{"time":"09:00","title":"Place Name","description":"Why visit","location":"Address","latitude":0.0,"longitude":0.0,"category":"landmark","duration_minutes":90,"estimated_cost":"IDR 50000"}]}],"summary":"One sentence","total_estimated_budget":"IDR X/person","best_season":"Months"}`
 
-  const text = await chatComplete(client, [{ role: 'user', content: prompt }], 6000)
-  const cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim()
+  const text = await chatComplete(client, [{ role: 'user', content: prompt }], 2500)
+
+  // Robust JSON extraction: strip markdown fences, then grab content between first { and last }
+  let cleaned = text
+    .replace(/```json\s*/gi, '')
+    .replace(/```\s*/gi, '')
+    .trim()
+
+  // Find the outermost JSON object (handles prefix/suffix text from the model)
+  const firstBrace = cleaned.indexOf('{')
+  const lastBrace  = cleaned.lastIndexOf('}')
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    cleaned = cleaned.slice(firstBrace, lastBrace + 1)
+  }
 
   let parsed: any
   try {
     parsed = JSON.parse(cleaned)
-  } catch {
-    throw new Error('AdaCode returned invalid JSON: ' + cleaned.substring(0, 120))
+  } catch (parseErr) {
+    console.error('[AdaCode] JSON parse failed. Length:', cleaned.length, '| Start:', cleaned.substring(0, 80))
+    throw new Error('AdaCode returned invalid JSON — response may be truncated. Try again.')
   }
 
   if (!parsed.itinerary || !Array.isArray(parsed.itinerary)) {
@@ -203,9 +228,15 @@ Return ONLY valid JSON (no markdown, no code fences):
   const text = await chatComplete(client, [
     { role: 'system', content: systemPrompt },
     { role: 'user',   content: message },
-  ], 1024)
+  ], 1500)
 
-  const cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim()
+  let cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim()
+  const firstBrace = cleaned.indexOf('{')
+  const lastBrace  = cleaned.lastIndexOf('}')
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    cleaned = cleaned.slice(firstBrace, lastBrace + 1)
+  }
+
   try {
     const parsed = JSON.parse(cleaned)
     return {
