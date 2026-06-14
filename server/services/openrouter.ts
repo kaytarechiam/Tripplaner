@@ -1,34 +1,35 @@
-// server/services/adacode.ts
-// adaCODE — OpenAI-compatible API at https://api.adacode.ai
-// Primary AI provider for TripPlanner (Sonnet / Qwen / MiniMax)
+// server/services/openrouter.ts
+// OpenRouter — OpenAI-compatible aggregator, hundreds of models including free ones.
+// Free models: meta-llama/llama-3.3-70b-instruct:free, google/gemini-2.0-flash-exp:free, etc.
 
 import OpenAI from 'openai'
 import type { ItineraryParams, GeneratedItinerary } from './gemini.js'
 
-// Config — all overridable via .env
-const ADACODE_BASE_URL = process.env.ADACODE_BASE_URL || 'https://api.adacode.ai/v1'
-const PRIMARY_MODEL    = process.env.ADACODE_MODEL    || 'claude-sonnet-4-6'
-const FALLBACK_MODEL   = 'qwen-plus'   // used when primary hits quota
+const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
+
+// Free models — primary is GPT OSS 120B (solid JSON output), fallback to Llama 70B
+const PRIMARY_MODEL   = process.env.OPENROUTER_MODEL   || 'openai/gpt-oss-120b:free'
+const FALLBACK_MODEL  = 'meta-llama/llama-3.3-70b-instruct:free'
 
 let _client: OpenAI | null = null
 
-export function getAdaCode(): OpenAI | null {
-  if (!process.env.ADACODE_API_KEY) {
-    console.warn('[AdaCode] Missing ADACODE_API_KEY in .env')
-    return null
-  }
+export function getOpenRouter(): OpenAI | null {
+  if (!process.env.OPENROUTER_API_KEY) return null
   if (!_client) {
     _client = new OpenAI({
-      apiKey:   process.env.ADACODE_API_KEY,
-      baseURL:  ADACODE_BASE_URL,
+      apiKey:  process.env.OPENROUTER_API_KEY,
+      baseURL: OPENROUTER_BASE_URL,
+      defaultHeaders: {
+        'HTTP-Referer': 'https://tripplaner.stei.cloud',
+        'X-Title':      'TripPlanner',
+      },
     })
   }
   return _client
 }
 
-/** Quick connectivity check — returns true if key is valid */
-export async function checkAdaCode(): Promise<boolean> {
-  const client = getAdaCode()
+export async function checkOpenRouter(): Promise<boolean> {
+  const client = getOpenRouter()
   if (!client) return false
   try {
     const resp = await client.chat.completions.create({
@@ -42,17 +43,14 @@ export async function checkAdaCode(): Promise<boolean> {
   }
 }
 
-// ─── Shared helper ───────────────────────────────────────────
-// SSE heartbeats keep Cloudflare alive, so we can wait up to 3 minutes
-const REQUEST_TIMEOUT_MS = 180_000
+// ─── Shared helper ────────────────────────────────────────────
+const REQUEST_TIMEOUT_MS = 120_000
 
 async function chatComplete(
   client: OpenAI,
   messages: { role: 'user' | 'system' | 'assistant'; content: string }[],
-  maxTokens = 2048,
-  retries = 1,
+  maxTokens = 2500,
 ): Promise<string> {
-  // Try primary model first, fall back to secondary on quota/rate/server errors
   for (const model of [PRIMARY_MODEL, FALLBACK_MODEL]) {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
@@ -63,43 +61,28 @@ async function chatComplete(
       )
       clearTimeout(timer)
       const text = resp.choices[0]?.message?.content || ''
-      // adaCODE returns plan/auth errors as message content instead of HTTP errors
-      if (text && (text.startsWith('ERROR:') || text.includes('Masa aktif') || text.includes('Unauthorized'))) {
-        console.error(`[AdaCode] ${model} returned auth/plan error:`, text.slice(0, 120))
-        throw new Error('AdaCode: ' + text.slice(0, 120))
-      }
       if (text) {
-        console.log(`[AdaCode] Responded via model: ${model}`)
+        console.log(`[OpenRouter] Responded via model: ${model}`)
         return text
       }
     } catch (err: any) {
       clearTimeout(timer)
       const msg: string = err?.message || String(err)
-      const isAbort  = err?.name === 'AbortError' || msg.includes('abort') || msg.includes('signal')
-      const isQuota  = msg.includes('429') || msg.includes('quota') || msg.includes('rate limit')
-      const isServer = msg.includes('500') || msg.includes('503') || msg.includes('canceled') || msg.includes('timeout')
+      const isAbort = err?.name === 'AbortError' || msg.includes('abort')
+      const isQuota = msg.includes('429') || msg.includes('quota') || msg.includes('rate limit')
 
-      if (isAbort) {
-        console.warn(`[AdaCode] ${model} timed out after ${REQUEST_TIMEOUT_MS / 1000}s`)
-        throw new Error('AI request timed out — please try again')
-      }
+      if (isAbort) throw new Error('OpenRouter request timed out — coba lagi')
       if (isQuota && model === PRIMARY_MODEL) {
-        console.warn(`[AdaCode] ${model} quota hit, trying ${FALLBACK_MODEL}...`)
+        console.warn(`[OpenRouter] ${model} rate limited, trying ${FALLBACK_MODEL}...`)
         continue
-      }
-      if (isServer && retries > 0) {
-        console.warn(`[AdaCode] ${model} server error (${msg.slice(0, 40)}), retrying in 2s...`)
-        await new Promise(r => setTimeout(r, 2000))
-        return chatComplete(client, messages, maxTokens, retries - 1)
       }
       throw err
     }
   }
-  throw new Error('[AdaCode] All models exhausted')
+  throw new Error('[OpenRouter] All models exhausted')
 }
 
-// ─── Itinerary generation ─────────────────────────────────────
-
+// ─── Helper untuk build booking links ─────────────────────────
 function buildBookingLinks(destination: string) {
   const q = encodeURIComponent(destination)
   return {
@@ -114,7 +97,8 @@ function buildBookingLinks(destination: string) {
   }
 }
 
-export async function generateItineraryAdaCode(params: ItineraryParams): Promise<{
+// ─── Itinerary generation ──────────────────────────────────────
+export async function generateItineraryOpenRouter(params: ItineraryParams): Promise<{
   destination: string
   trip_summary: string
   booking_links: Record<string, string>
@@ -124,14 +108,14 @@ export async function generateItineraryAdaCode(params: ItineraryParams): Promise
   total_estimated_budget: string
   best_season: string
 }> {
-  const client = getAdaCode()
-  if (!client) throw new Error('AdaCode API not configured — set ADACODE_API_KEY in .env')
+  const client = getOpenRouter()
+  if (!client) throw new Error('OpenRouter API not configured — set OPENROUTER_API_KEY in .env')
 
   const budgetRangeStr = params.min_budget && params.max_budget
     ? `\nBudget range per hari: Rp ${params.min_budget.toLocaleString('id-ID')} – Rp ${params.max_budget.toLocaleString('id-ID')}.`
     : ''
   const customNoteStr = params.custom_message
-    ? `\nCatatan khusus dari user (wajib dipertimbangkan): ${params.custom_message}`
+    ? `\nIMPORTANT special request (must be followed): ${params.custom_message}`
     : ''
 
   const dayList = Array.from({ length: params.days }, (_, i) => `day ${i + 1}`).join(', ')
@@ -140,7 +124,7 @@ export async function generateItineraryAdaCode(params: ItineraryParams): Promise
 ${params.trip_type ? ` Style: ${params.trip_type}.` : ''}\
 ${params.travelers ? ` Travelers: ${params.travelers}.` : ''}\
 ${params.start_date ? ` Start date: ${params.start_date}.` : ''}\
-${params.preferences ? ` Preferences: ${params.preferences}.` : ''}${budgetRangeStr}${customNoteStr ? `\nIMPORTANT special request (wajib diikuti): ${params.custom_message}` : ''}
+${params.preferences ? ` Preferences: ${params.preferences}.` : ''}${budgetRangeStr}${customNoteStr}
 
 CRITICAL RULES:
 - You MUST generate EXACTLY ${params.days} days: ${dayList}
@@ -151,15 +135,13 @@ CRITICAL RULES:
 JSON structure (repeat for ALL ${params.days} days):
 {"itinerary":[{"day":1,"date":"YYYY-MM-DD","items":[{"time":"09:00","title":"Place Name","description":"Why visit","location":"Address","latitude":0.0,"longitude":0.0,"category":"landmark","duration_minutes":90,"estimated_cost":"IDR 50000"},{"time":"12:00","title":"Place 2","description":"Why","location":"Address","latitude":0.0,"longitude":0.0,"category":"food","duration_minutes":60,"estimated_cost":"IDR 30000"},{"time":"15:00","title":"Place 3","description":"Why","location":"Address","latitude":0.0,"longitude":0.0,"category":"landmark","duration_minutes":90,"estimated_cost":"IDR 25000"}]},{"day":2,"date":"YYYY-MM-DD","items":[...3 items...]}],"summary":"One sentence","total_estimated_budget":"IDR X/person","best_season":"Months"}`
 
-  const text = await chatComplete(client, [{ role: 'user', content: prompt }], 2500)
+  const text = await chatComplete(client, [{ role: 'user', content: prompt }])
 
-  // Robust JSON extraction: strip markdown fences, then grab content between first { and last }
   let cleaned = text
     .replace(/```json\s*/gi, '')
     .replace(/```\s*/gi, '')
     .trim()
 
-  // Find the outermost JSON object (handles prefix/suffix text from the model)
   const firstBrace = cleaned.indexOf('{')
   const lastBrace  = cleaned.lastIndexOf('}')
   if (firstBrace !== -1 && lastBrace > firstBrace) {
@@ -169,23 +151,23 @@ JSON structure (repeat for ALL ${params.days} days):
   let parsed: any
   try {
     parsed = JSON.parse(cleaned)
-  } catch (parseErr) {
-    console.error('[AdaCode] JSON parse failed. Length:', cleaned.length, '| Start:', cleaned.substring(0, 80))
-    throw new Error('AdaCode returned invalid JSON — response may be truncated. Try again.')
+  } catch {
+    console.error('[OpenRouter] JSON parse failed. Start:', cleaned.substring(0, 80))
+    throw new Error('OpenRouter returned invalid JSON — coba lagi.')
   }
 
   if (!parsed.itinerary || !Array.isArray(parsed.itinerary)) {
-    throw new Error('AdaCode returned invalid itinerary structure')
+    throw new Error('OpenRouter returned invalid itinerary structure')
   }
 
+  // Validate day count — throw so the route can retry with next provider
   if (parsed.itinerary.length < params.days) {
-    console.warn(`[AdaCode] Expected ${params.days} days, got ${parsed.itinerary.length}`)
+    console.warn(`[OpenRouter] Expected ${params.days} days, got ${parsed.itinerary.length}`)
     if (parsed.itinerary.length < Math.ceil(params.days * 0.7)) {
-      throw new Error(`AdaCode only generated ${parsed.itinerary.length} of ${params.days} days — retrying`)
+      throw new Error(`OpenRouter only generated ${parsed.itinerary.length} of ${params.days} days — retrying`)
     }
   }
 
-  const bookingLinks = buildBookingLinks(params.destination)
   const hotelBudgetMap: Record<string, number> = {
     budget: 350_000, low: 300_000,
     moderate: 650_000, mid: 600_000,
@@ -196,11 +178,11 @@ JSON structure (repeat for ALL ${params.days} days):
   return {
     destination: params.destination,
     trip_summary: parsed.summary || '',
-    booking_links: bookingLinks,
+    booking_links: buildBookingLinks(params.destination),
     hotels: [
-      { name: `${params.destination} Budget Inn`,   category: 'budget',    estimated_price_idr: basePrice,       notes: 'Affordable, central location'     },
-      { name: `${params.destination} City Hotel`,   category: 'mid-range', estimated_price_idr: basePrice * 1.5, notes: 'Great value, good amenities'       },
-      { name: `${params.destination} Grand Resort`, category: 'premium',   estimated_price_idr: basePrice * 3,   notes: 'Luxury experience, top-rated'     },
+      { name: `${params.destination} Budget Inn`,   category: 'budget',    estimated_price_idr: basePrice,       notes: 'Affordable, central location' },
+      { name: `${params.destination} City Hotel`,   category: 'mid-range', estimated_price_idr: basePrice * 1.5, notes: 'Great value, good amenities'   },
+      { name: `${params.destination} Grand Resort`, category: 'premium',   estimated_price_idr: basePrice * 3,   notes: 'Luxury experience, top-rated'  },
     ],
     itinerary: parsed.itinerary,
     summary: parsed.summary || '',
@@ -209,22 +191,21 @@ JSON structure (repeat for ALL ${params.days} days):
   }
 }
 
-// ─── Chat (TripAI assistant) ──────────────────────────────────
-
-export async function adaCodeChat(
+// ─── Chat (TripAI assistant) ───────────────────────────────────
+export async function openRouterChat(
   message: string,
   context?: string,
   items?: any[],
 ): Promise<{ reply: string; actions: any[] }> {
-  const client = getAdaCode()
-  if (!client) throw new Error('AdaCode API not configured')
+  const client = getOpenRouter()
+  if (!client) throw new Error('OpenRouter API not configured')
 
-  const ctx = context ? `Current itinerary:\n${context}\n---\n` : ''
+  const ctx       = context ? `Current itinerary:\n${context}\n---\n` : ''
   const itemsList = items?.length
     ? `\nExisting item IDs:\n${items.map((i: any) => `- id:"${i.id}" title:"${i.title}" day:${i.day} time:${i.time}`).join('\n')}\n---\n`
     : ''
 
-  const systemPrompt = `You are TripAI — a friendly Indonesian travel assistant embedded in a trip planner app. You help users modify their itinerary.
+  const systemPrompt = `You are TripAI — a friendly Indonesian travel assistant embedded in a trip planner app.
 
 ${ctx}${itemsList}Rules:
 - Always reply in Bahasa Indonesia, friendly & helpful tone, 1-3 sentences
@@ -248,7 +229,7 @@ Return ONLY valid JSON (no markdown, no code fences):
   const text = await chatComplete(client, [
     { role: 'system', content: systemPrompt },
     { role: 'user',   content: message },
-  ], 1500)
+  ], 1000)
 
   let cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim()
   const firstBrace = cleaned.indexOf('{')
@@ -264,7 +245,6 @@ Return ONLY valid JSON (no markdown, no code fences):
       actions: Array.isArray(parsed.actions) ? parsed.actions : [],
     }
   } catch {
-    // If JSON parse fails, return the text as a plain reply
     return { reply: text.slice(0, 300), actions: [] }
   }
 }

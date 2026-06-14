@@ -17,6 +17,7 @@ import rapidapiRoutes from './routes/rapidapi.js'
 import routingRoutes from './routes/routing.js'
 import imagesRoutes from './routes/images.js'
 import { checkSupabase } from './services/supabase.js'
+import { checkOpenRouter } from './services/openrouter.js'
 import { checkClaude } from './services/claude.js'
 import { checkGemini } from './services/gemini.js'
 import { checkOpenAI } from './services/openai.js'
@@ -81,8 +82,9 @@ if (IS_PROD) {
 
 // ─── Health Check ─────────────────────────────────────────
 app.get('/api/health', async (_req, res) => {
-  const [supabaseOk, claudeOk, geminiOk, openaiOk] = await Promise.all([
+  const [supabaseOk, openrouterOk, claudeOk, geminiOk, openaiOk] = await Promise.all([
     checkSupabase().then(() => true).catch(() => false),
+    checkOpenRouter().then(() => true).catch(() => false),
     checkClaude().then(() => true).catch(() => false),
     checkGemini().then(() => true).catch(() => false),
     checkOpenAI().then(() => true).catch(() => false),
@@ -94,9 +96,10 @@ app.get('/api/health', async (_req, res) => {
     timestamp: new Date().toISOString(),
     services: {
       supabase: supabaseOk,
-      openai: claudeOk,
+      openrouter: openrouterOk,
+      adacode: claudeOk,
       gemini: geminiOk,
-      openai_fallback: openaiOk,
+      openai: openaiOk,
       resend: !!process.env.RESEND_API_KEY,
     },
   })

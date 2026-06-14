@@ -97,10 +97,13 @@ export function AIGeneratorPage({ navigateTo }: Props) {
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
 
-  // Derived: number of days
+  // Manual day override — used when no dates selected
+  const [manualDays, setManualDays] = useState(3)
+
+  // Derived: if dates set → use date diff; otherwise use manual slider
   const duration = startDate && endDate
     ? Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1)
-    : 2
+    : manualDays
 
   const [people, setPeople] = useState(2)
   // Budget: free-input + presets (default ~1jt/hari)
@@ -196,6 +199,7 @@ export function AIGeneratorPage({ navigateTo }: Props) {
     setSelectedPlace(null)
     setStartDate("")
     setEndDate("")
+    setManualDays(3)
     setPeople(2)
     setMinBudget(BUDGET_PRESETS[2].min)   // default: kisaran 1jt
     setMaxBudget(BUDGET_PRESETS[2].max)
@@ -276,6 +280,12 @@ export function AIGeneratorPage({ navigateTo }: Props) {
         setError("Tidak bisa terhubung ke server. Pastikan server backend sudah berjalan (npm run dev).")
       } else if (msg.includes("not configured") || msg.includes("API key") || msg.includes("ADACODE")) {
         setError("AI belum dikonfigurasi. Pastikan ADACODE_API_KEY sudah benar di server/.env")
+      } else if (msg.includes("Kredit adaCODE") || msg.includes("adacode.ai") || msg.includes("perpanjang")) {
+        setError("Kredit adaCODE habis. Silakan perpanjang langganan di adacode.ai agar fitur AI kembali aktif.")
+      } else if (msg.includes("quota") || msg.includes("billing") || msg.includes("exceeded") || msg.includes("tidak tersedia")) {
+        setError("Layanan AI sedang penuh atau tidak tersedia. Coba lagi beberapa saat ya.")
+      } else if (msg.includes("timed out") || msg.includes("timeout")) {
+        setError("AI membutuhkan waktu terlalu lama. Coba dengan destinasi atau durasi yang lebih singkat.")
       } else {
         setError(msg || "Gagal generate itinerary. Coba lagi.")
       }
@@ -464,10 +474,38 @@ export function AIGeneratorPage({ navigateTo }: Props) {
                     />
                   </div>
                 </div>
-                {duration > 0 && startDate && endDate && (
+                {startDate && endDate ? (
                   <p className="text-xs text-muted-foreground">
-                    📅 {duration} hari perjalanan
+                    📅 {duration} hari perjalanan (dari tanggal)
                   </p>
+                ) : (
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs text-muted-foreground">Durasi Perjalanan</Label>
+                      <span className="text-sm font-semibold">{manualDays} hari</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setManualDays(d => Math.max(1, d - 1))}
+                        className="w-8 h-8 rounded-lg border border-input bg-secondary hover:bg-secondary/80 flex items-center justify-center text-base font-bold transition-colors"
+                      >−</button>
+                      <input
+                        type="range"
+                        min={1}
+                        max={14}
+                        value={manualDays}
+                        onChange={e => setManualDays(Number(e.target.value))}
+                        className="flex-1 accent-violet-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setManualDays(d => Math.min(14, d + 1))}
+                        className="w-8 h-8 rounded-lg border border-input bg-secondary hover:bg-secondary/80 flex items-center justify-center text-base font-bold transition-colors"
+                      >+</button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">atau pilih tanggal di atas untuk set otomatis</p>
+                  </div>
                 )}
               </div>
 
@@ -853,34 +891,43 @@ export function AIGeneratorPage({ navigateTo }: Props) {
                             const catColor = catColorMap[cat] || "from-gray-400 to-gray-500"
 
                             // Build booking platform buttons based on category
-                            const itemQuery = encodeURIComponent(item.location || item.title)
-                            const itemCat = cat
+                            const locQ   = encodeURIComponent((item.location || item.title || "").trim())
+                            const titleQ = encodeURIComponent((item.title || item.location || "").trim())
+                            const itemCat   = cat
                             const itemTitle = item.title?.toLowerCase() || ""
                             const aiBookingPlatforms: Array<{name: string; url: string; color: string}> = []
 
+                            // Google Maps — always shown
+                            aiBookingPlatforms.push(
+                              { name: "Maps", url: `https://www.google.com/maps/search/?api=1&query=${locQ}`, color: "bg-[#4285F4] hover:bg-[#2b6cd6]" }
+                            )
+
                             if (itemCat === "hotel") {
-                              const ci = startDate
-                              const co = endDate
+                              const ci = startDate, co = endDate
                               aiBookingPlatforms.push(
-                                { name: "Traveloka", url: `https://www.traveloka.com/en-id/hotel?search=${itemQuery}${ci ? `&checkInDate=${ci.replace(/-/g,'')}&checkOutDate=${co.replace(/-/g,'')}` : ''}`, color: "bg-blue-600 hover:bg-blue-700" },
-                                { name: "Tiket.com", url: `https://www.tiket.com/hotel?q=${itemQuery}${ci ? `&checkIn=${ci}&checkOut=${co}` : ''}`, color: "bg-[#f97316] hover:bg-[#ea580c]" },
-                                { name: "Agoda", url: `https://www.agoda.com/search?city=${itemQuery}${ci ? `&checkIn=${ci}` : ''}`, color: "bg-[#dd1f39] hover:bg-[#b71c1c]" },
-                                { name: "Booking.com", url: `https://www.booking.com/searchresults.html?ss=${itemQuery}${ci ? `&checkin=${ci}&checkout=${co}` : ''}`, color: "bg-[#003580] hover:bg-[#00224f]" }
+                                { name: "Traveloka", url: `https://www.traveloka.com/en-id/hotel?search=${locQ}${ci ? `&checkInDate=${ci.replace(/-/g,'')}&checkOutDate=${co.replace(/-/g,'')}` : ''}`, color: "bg-blue-600 hover:bg-blue-700" },
+                                { name: "Booking",   url: `https://www.booking.com/searchresults.html?ss=${locQ}${ci ? `&checkin=${ci}&checkout=${co}` : ''}`, color: "bg-[#003580] hover:bg-[#00224f]" },
+                                { name: "Agoda",     url: `https://www.agoda.com/search?city=${locQ}${ci ? `&checkIn=${ci}` : ''}`, color: "bg-[#dd1f39] hover:bg-[#b71c1c]" },
+                                { name: "Airbnb",    url: `https://www.airbnb.com/s/${locQ}/homes`, color: "bg-[#FF5A5F] hover:bg-[#e04347]" }
                               )
                             } else if (itemCat === "transport" && (itemTitle.includes("flight") || itemTitle.includes("penerbangan") || itemTitle.includes("pesawat"))) {
                               aiBookingPlatforms.push(
-                                { name: "Traveloka", url: `https://www.traveloka.com/en/flights/search?query=${itemQuery}`, color: "bg-blue-600 hover:bg-blue-700" },
-                                { name: "Tiket.com", url: `https://www.tiket.com/search?query=${itemQuery}&type=flight`, color: "bg-[#f97316] hover:bg-[#ea580c]" }
+                                { name: "Traveloka", url: `https://www.traveloka.com/en/flights/search?query=${locQ}`, color: "bg-blue-600 hover:bg-blue-700" },
+                                { name: "Tiket.com", url: `https://www.tiket.com/search?query=${locQ}&type=flight`, color: "bg-[#f97316] hover:bg-[#ea580c]" }
                               )
                             } else if (itemCat === "transport" && (itemTitle.includes("kereta") || itemTitle.includes("train") || itemTitle.includes("bus"))) {
                               aiBookingPlatforms.push(
-                                { name: "Traveloka", url: `https://www.traveloka.com/en/trains/search?query=${itemQuery}`, color: "bg-blue-600 hover:bg-blue-700" },
-                                { name: "Tiket.com", url: `https://www.tiket.com/search?query=${itemQuery}&type=train`, color: "bg-[#f97316] hover:bg-[#ea580c]" }
+                                { name: "Traveloka", url: `https://www.traveloka.com/en/trains/search?query=${locQ}`, color: "bg-blue-600 hover:bg-blue-700" },
+                                { name: "Tiket.com", url: `https://www.tiket.com/search?query=${locQ}&type=train`, color: "bg-[#f97316] hover:bg-[#ea580c]" }
                               )
                             } else if (itemCat === "food") {
                               aiBookingPlatforms.push(
-                                { name: "Booking.com", url: `https://www.booking.com/search.html?ss=${itemQuery}&dest_type=city`, color: "bg-[#003580] hover:bg-[#00224f]" },
-                                { name: "Traveloka", url: `https://www.traveloka.com/en/flights/search?query=${itemQuery}`, color: "bg-blue-600 hover:bg-blue-700" }
+                                { name: "Klook", url: `https://www.klook.com/en-ID/search/?query=${titleQ}`, color: "bg-[#FF5010] hover:bg-[#e04000]" }
+                              )
+                            } else if (["landmark", "nature", "activity", "shopping"].includes(itemCat)) {
+                              aiBookingPlatforms.push(
+                                { name: "Klook",        url: `https://www.klook.com/en-ID/search/?query=${titleQ}`,    color: "bg-[#FF5010] hover:bg-[#e04000]" },
+                                { name: "GetYourGuide", url: `https://www.getyourguide.com/s/?q=${titleQ}`,            color: "bg-[#FF8000] hover:bg-[#e07000]" }
                               )
                             }
 

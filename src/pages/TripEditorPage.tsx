@@ -123,71 +123,47 @@ function getWeatherIcon(code: number): string {
 // ─── Get booking platforms for an item ─────────────────────
 function getBookingPlatforms(item: ItineraryItem) {
   if (!item.location && !item.title) return [];
-  const query = encodeURIComponent(item.location || item.title);
+  const locationQuery = encodeURIComponent((item.location || item.title).trim());
+  const titleQuery    = encodeURIComponent((item.title || item.location).trim());
   const category = item.category?.toLowerCase() || "activity";
-  const title = item.title?.toLowerCase() || "";
+  const title    = item.title?.toLowerCase() || "";
 
-  const platforms: Array<{
-    id: string;
-    name: string;
-    url: string;
-    color: string;
-  }> = [];
+  const platforms: Array<{ id: string; name: string; url: string; color: string }> = [];
+
+  // Google Maps — always shown for every item
+  platforms.push({
+    id: "maps",
+    name: "Maps",
+    url: `https://www.google.com/maps/search/?api=1&query=${locationQuery}`,
+    color: "bg-[#4285F4] hover:bg-[#2b6cd6]",
+  });
 
   if (category === "hotel" || category === "accommodation") {
     platforms.push(
-      {
-        id: "traveloka",
-        name: "Traveloka",
-        url: `https://www.traveloka.com/en/hotels/search?query=${query}`,
-        color: "bg-blue-600 hover:bg-blue-700",
-      },
-      {
-        id: "tiket",
-        name: "Tiket.com",
-        url: `https://www.tiket.com/search?query=${query}&type=hotel`,
-        color: "bg-[#f97316] hover:bg-[#ea580c]",
-      },
-      {
-        id: "agoda",
-        name: "Agoda",
-        url: `https://www.agoda.com/search?locale=en-us&currency=IDR&pricenext=1&query=${query}`,
-        color: "bg-[#dd1f39] hover:bg-[#b71c1c]",
-      },
-      {
-        id: "booking",
-        name: "Booking.com",
-        url: `https://www.booking.com/search.html?ss=${query}`,
-        color: "bg-[#003580] hover:bg-[#00224f]",
-      },
+      { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/hotels/search?query=${locationQuery}`, color: "bg-blue-600 hover:bg-blue-700" },
+      { id: "booking",   name: "Booking",   url: `https://www.booking.com/search.html?ss=${locationQuery}`,           color: "bg-[#003580] hover:bg-[#00224f]" },
+      { id: "agoda",     name: "Agoda",     url: `https://www.agoda.com/search?locale=en-us&currency=IDR&query=${locationQuery}`, color: "bg-[#dd1f39] hover:bg-[#b71c1c]" },
+      { id: "airbnb",    name: "Airbnb",    url: `https://www.airbnb.com/s/${locationQuery}/homes`,                   color: "bg-[#FF5A5F] hover:bg-[#e04347]" },
     );
-  } else if (
-    category === "transport" &&
-    (title.includes("flight") ||
-      title.includes("pesawat") ||
-      title.includes("penerbangan"))
-  ) {
+  } else if (category === "transport" && (title.includes("flight") || title.includes("pesawat") || title.includes("penerbangan"))) {
     platforms.push(
-      {
-        id: "traveloka",
-        name: "Traveloka",
-        url: `https://www.traveloka.com/en/flights/search?query=${query}`,
-        color: "bg-blue-600 hover:bg-blue-700",
-      },
-      {
-        id: "tiket",
-        name: "Tiket.com",
-        url: `https://www.tiket.com/search?query=${query}&type=flight`,
-        color: "bg-[#f97316] hover:bg-[#ea580c]",
-      },
+      { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/flights/search?query=${locationQuery}`, color: "bg-blue-600 hover:bg-blue-700" },
+      { id: "tiket",     name: "Tiket.com", url: `https://www.tiket.com/search?query=${locationQuery}&type=flight`,    color: "bg-[#f97316] hover:bg-[#ea580c]" },
+    );
+  } else if (category === "transport" && (title.includes("kereta") || title.includes("train") || title.includes("bus"))) {
+    platforms.push(
+      { id: "traveloka", name: "Traveloka", url: `https://www.traveloka.com/en/trains/search?query=${locationQuery}`, color: "bg-blue-600 hover:bg-blue-700" },
+      { id: "tiket",     name: "Tiket.com", url: `https://www.tiket.com/search?query=${locationQuery}&type=train`,    color: "bg-[#f97316] hover:bg-[#ea580c]" },
     );
   } else if (category === "food") {
-    platforms.push({
-      id: "booking",
-      name: "Booking.com",
-      url: `https://www.booking.com/search.html?ss=${query}`,
-      color: "bg-[#003580] hover:bg-[#00224f]",
-    });
+    platforms.push(
+      { id: "klook", name: "Klook",  url: `https://www.klook.com/en-ID/search/?query=${titleQuery}`,   color: "bg-[#FF5010] hover:bg-[#e04000]" },
+    );
+  } else if (["landmark", "nature", "activity", "shopping"].includes(category)) {
+    platforms.push(
+      { id: "klook",      name: "Klook",      url: `https://www.klook.com/en-ID/search/?query=${titleQuery}`,  color: "bg-[#FF5010] hover:bg-[#e04000]" },
+      { id: "getyourguide", name: "GetYourGuide", url: `https://www.getyourguide.com/s/?q=${titleQuery}`,     color: "bg-[#FF8000] hover:bg-[#e07000]" },
+    );
   }
 
   return platforms;
